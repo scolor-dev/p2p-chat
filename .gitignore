@@ -1,0 +1,35 @@
+# OS / Editor
+.DS_Store
+.idea/
+.vscode/
+*.swp
+
+# Env
+.env
+.env.*
+!.env.example
+
+# Go
+services/signaling/bin/
+*.test
+*.out
+
+# Android
+apps/android/.gradle/
+apps/android/build/
+apps/android/**/build/
+apps/android/local.properties
+*.keystore
+*.jks
+
+# iOS
+apps/ios/**/xcuserdata/
+apps/ios/DerivedData/
+apps/ios/build/
+*.xcuserstate
+
+# Local database
+data/
+*.db
+*.db-shm
+*.db-wal
