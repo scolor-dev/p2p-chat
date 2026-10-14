@@ -2,10 +2,16 @@
 
 | 項目 | 内容 |
 |---|---|
-| バージョン | **v0.1** |
-| 更新日 | 2026-10-13 |
-| 状態 | サーバー（signaling）は実装済み。Android アプリは未着手 |
+| バージョン | **v0.2** |
+| 更新日 | 2026-10-14 |
+| 状態 | サーバー（signaling）は実装済み。Android / iOS はプロジェクトの雛形のみ |
 | 対象 | Android アプリ 1 種類 + シグナリングサーバー |
+
+### 変更履歴
+| 版 | 内容 |
+|---|---|
+| v0.2 | 鍵を P-256 + Android Keystore に変更、minSdk 31、アプリの構成方針、開発の進め方（ブランチ・レビュー・CI・Backlog 同期）を追加 |
+| v0.1 | 初版 |
 
 ## 1. 概要
 
@@ -97,10 +103,11 @@ flowchart LR
 | 領域 | 採用 | 備考 |
 |---|---|---|
 | サーバー | Go、SQLite（`modernc.org/sqlite`）、WebSocket（`coder/websocket`） | C コンパイラ不要。Mac / Windows で `go run` するだけで動く |
-| アプリ | Kotlin、ネイティブ WebRTC | ライブラリ、UI フレームワーク、アーキテクチャはアプリ側で自由に選ぶ |
+| アプリ | Kotlin、Jetpack Compose、ネイティブ WebRTC | minSdk 31（Android 12）。MVVM + Repository、手動 DI、Room、Navigation Compose |
 | 通信 | WebRTC DataChannel（P2P）、シグナリングは WebSocket | |
-| 暗号 | X25519（鍵共有）+ HKDF-SHA256 + AES-256-GCM | 詳細は「7. アプリ共通のルール」 |
+| 暗号 | ECDH（P-256、Android Keystore）+ HKDF-SHA256 + AES-256-GCM | OS 標準の機能で実装する。詳細は「7. アプリ共通のルール」 |
 | 開発環境 | サーバーは PC で直接起動、アプリは Android Studio | Docker はデプロイ時に検討する |
+| CI・リポジトリ | GitHub Actions、GitHub（正）→ Backlog Git（自動ミラー） | 詳細は「9. 開発の進め方」 |
 
 ### 3-4. データの置き場所
 
@@ -108,7 +115,7 @@ flowchart LR
 |---|---|---|
 | 端末 ID（`deviceId`） | ○ | ○ |
 | 公開鍵 | ○ | ○（自分の鍵と、連絡先の鍵） |
-| 秘密鍵 | ✕ | ○（端末の外に出さない） |
+| 秘密鍵 | ✕ | ○（Android Keystore の中。アプリからも取り出せない） |
 | 認証トークン | ハッシュのみ | ○（平文） |
 | 連絡先（確認済み / 未確認） | ✕ | ○ |
 | チャット本文・履歴 | ✕ | ○ |
@@ -135,7 +142,8 @@ flowchart LR
 | 登録の乱用 | 端末登録の制限が必要 | ✕（ローカル開発のみ） |
 
 - サーバーから見えるのは、端末 ID、公開鍵、誰が誰に接続しようとしたか、その時刻まで。
-- 鍵は固定（端末ごとに 1 つ）なので、前方秘匿性はない。秘密鍵が漏れると、記録されていた過去の暗号文も読める。
+- 秘密鍵は Android Keystore の中で作り、外に出さない設定にする。鍵共有の計算も Keystore の中で行う。
+- 鍵は固定（端末ごとに 1 つ）なので、前方秘匿性はない。万一秘密鍵が漏れると、記録されていた過去の暗号文も読める。
 
 ---
 
@@ -144,9 +152,11 @@ flowchart LR
 ```text
 .
 ├── apps/
-│   └── android/              # Android アプリ（Kotlin）
+│   ├── android/              # Android アプリ（Kotlin）
+│   └── ios/                  # iOS アプリ（Swift、MVP 対象外。雛形のみ）
 ├── services/
 │   └── signaling/            # シグナリングサーバー（Go）
+├── .github/workflows/        # CI、Backlog へのミラー
 └── docs/
     ├── design.md             # この文書
     ├── apps/
@@ -169,7 +179,7 @@ sequenceDiagram
     participant App as アプリ
     participant S as signaling サーバー
 
-    Note over App: X25519 の鍵ペアを生成<br/>秘密鍵は端末の外に出さない
+    Note over App: Android Keystore に P-256 の鍵ペアを生成<br/>秘密鍵は Keystore の外に出ない
     App->>S: POST /devices<br/>{ name, publicKey }
     S-->>App: 201 { deviceId, token }
     Note over App: deviceId と token を端末に保存<br/>token はこの 1 回しか返らない
@@ -377,7 +387,7 @@ stateDiagram-v2
 { "name": "Pixel 8", "publicKey": "base64..." }
 ```
 - `name`: 1〜64 文字
-- `publicKey`: X25519 の公開鍵（32 バイト）を base64 にしたもの。サーバーはデコード後 1〜256 バイトを受け付ける
+- `publicKey`: P-256 の公開鍵を X.509（SubjectPublicKeyInfo、DER、91 バイト）で書き出し、base64 にしたもの。Android の `PublicKey.getEncoded()` の出力がそのまま使える。サーバーはデコード後 1〜256 バイトを受け付ける
 
 レスポンス `201`:
 ```json
@@ -438,7 +448,7 @@ QR の中身は次の URL。
 ```text
 p2pchat://contact?id=<deviceId>&fp=<fingerprint>
 ```
-- `fp`: 公開鍵（base64 をデコードしたバイト列）の SHA-256 を、パディングなしの base64url にしたもの。
+- `fp`: 公開鍵（base64 をデコードした X.509 DER のバイト列）の SHA-256 を、パディングなしの base64url にしたもの。
 
 ### 連絡先
 | 項目 | 内容 |
@@ -452,10 +462,10 @@ p2pchat://contact?id=<deviceId>&fp=<fingerprint>
 ### メッセージの暗号化
 1. **共通の鍵を作る**（相手ごとに 1 回）
    ```text
-   shared = X25519(自分の秘密鍵, 相手の公開鍵)
+   shared = ECDH-P256(自分の秘密鍵, 相手の公開鍵)   ← Keystore の中で計算する（KeyAgreement "ECDH"）
    key    = HKDF-SHA256(ikm = shared, salt = なし, info = "p2p-chat/v1/message", 長さ 32 バイト)
    ```
-   両者が同じ `key` を得る。
+   両者が同じ `key` を得る。`shared` と `key` はアプリのメモリ上に置き、ファイルには保存しない。
 2. **暗号化する**（メッセージごと）
    - 平文: `{ "text": "こんにちは", "sentAt": "2026-10-13T04:03:24Z" }` の UTF-8
    - 方式: AES-256-GCM。`nonce` は毎回ランダムな 12 バイト。追加認証データ（AAD）は `id` の UTF-8
@@ -514,16 +524,48 @@ stateDiagram-v2
 
 ---
 
-## 9. 決定事項と今後
+## 9. 開発の進め方
 
-### 決定事項（v0.1）
+### ブランチと PR
+```mermaid
+flowchart LR
+    I["Issue"] --> F["作業ブランチ<br/>feature/#番号-内容"]
+    F -- "PR（develop 宛て）" --> D["develop"]
+    D -- "区切りで PR" --> M["main"]
+    D -. "自動ミラー" .-> BL["Backlog Git"]
+    M -. "自動ミラー" .-> BL
+```
+
+| 項目 | ルール |
+|---|---|
+| ブランチ | `develop` から `feature/#番号-内容`、`fix/#番号-内容`、`chore/#番号-内容` を切る |
+| PR | `develop` 宛て。区切りの良いところで `develop` → `main` |
+| マージ | Squash merge（1 PR = 1 コミット） |
+| レビュー | @scolor-dev の Approve と CI の成功が必須 |
+| CI | GitHub Actions。Go のテストと、Android のビルド・ユニットテスト（変更したフォルダだけ） |
+
+### リポジトリの同期
+- 正は **GitHub**。`main` / `develop` が更新されると、GitHub Actions が Backlog の Git（`2026TEAM2/p2pchat`）へ自動で push する。
+- **Backlog の Git では直接コミットしない。** 内容が食い違うと、同期が失敗する。
+
+### 動作確認の環境
+- 実機の Android 端末 2 台（Android 12 以上）。テスト用の相手役は用意しない。
+
+---
+
+## 10. 決定事項と今後
+
+### 決定事項（v0.2）
 | 項目 | 決定 |
 |---|---|
 | 対象 OS | Android のみ（iOS は対象外） |
 | 相手の登録 | QR で相手の `deviceId` と公開鍵を端末内に保存する。片方が読めば話しかけられる |
 | 知らない相手 | 接続の申請として確認する。許可で自動追加（未確認）、拒否で `reject` を返す |
-| 鍵 | X25519（端末ごとに 1 つ）。サーバーは公開鍵を保存し、種類は問わない |
-| 本文の暗号化 | X25519 + HKDF-SHA256 + AES-256-GCM |
+| 鍵 | P-256（端末ごとに 1 つ）。秘密鍵は Android Keystore の外に出さない。サーバーは公開鍵を保存し、種類は問わない |
+| 本文の暗号化 | ECDH（P-256）+ HKDF-SHA256 + AES-256-GCM。OS 標準の機能で実装する |
+| Android | minSdk 31（Android 12）。MVVM + Repository、手動 DI、Room、Navigation Compose |
+| 開発の進め方 | develop + 作業ブランチ、Squash merge、@scolor-dev の Approve と CI が必須 |
+| リポジトリ | GitHub が正。Backlog の Git へ自動ミラー |
 | 送信状態 | 送信中 / 送信済み / 送信失敗。相手の `ack` で送信済み、10 秒で失敗。再送は手動 |
 | 本文の長さ | UTF-8 で 4096 バイトまで（1024 文字は必ず入る） |
 | TURN | MVP では使わない |
