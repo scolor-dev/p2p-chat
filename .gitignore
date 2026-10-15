@@ -28,8 +28,8 @@ apps/ios/DerivedData/
 apps/ios/build/
 *.xcuserstate
 
-# Local database
-data/
+# Local database（サーバーの SQLite。アプリの data パッケージは対象外）
+services/signaling/data/
 *.db
 *.db-shm
 *.db-wal
