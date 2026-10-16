@@ -1,3 +1,11 @@
 <resources>
     <string name="app_name">P2P Chat</string>
+
+    <string name="contacts_title">連絡先</string>
+    <string name="contacts_empty">連絡先がありません</string>
+    <string name="chat_title">チャット</string>
+    <string name="qr_title">QR</string>
+    <string name="settings_title">設定</string>
+    <string name="back">戻る</string>
+    <string name="placeholder_message">準備中です</string>
 </resources>
