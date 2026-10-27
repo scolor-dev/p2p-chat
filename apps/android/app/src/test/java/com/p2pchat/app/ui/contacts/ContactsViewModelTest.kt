@@ -23,6 +23,9 @@ class ContactsViewModelTest {
     private class FakeContactRepository : ContactRepository {
         val contacts = MutableStateFlow<List<Contact>>(emptyList())
         override fun observeContacts(): Flow<List<Contact>> = contacts
+        override suspend fun getContact(deviceId: String): Contact? = contacts.value.find { it.deviceId == deviceId }
+        override suspend fun saveContact(contact: Contact) { contacts.value = contacts.value + contact }
+        override suspend fun deleteContact(deviceId: String) { contacts.value = contacts.value.filterNot { it.deviceId == deviceId } }
     }
 
     @Test
