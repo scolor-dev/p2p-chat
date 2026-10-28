@@ -39,6 +39,16 @@ class OfflineContactRepositoryTest {
             contacts.value = contacts.value + (contact.deviceId to contact)
         }
 
+        override suspend fun updateName(deviceId: String, name: String) {
+            val existing = contacts.value[deviceId] ?: return
+            contacts.value = contacts.value + (deviceId to existing.copy(name = name))
+        }
+
+        override suspend fun updateVerified(deviceId: String, isVerified: Boolean) {
+            val existing = contacts.value[deviceId] ?: return
+            contacts.value = contacts.value + (deviceId to existing.copy(isVerified = isVerified))
+        }
+
         override suspend fun deleteByDeviceId(deviceId: String) {
             contacts.value = contacts.value - deviceId
         }
@@ -95,6 +105,7 @@ class OfflineContactRepositoryTest {
         val initial = Contact(
             deviceId = "dev-001",
             name = "Alice",
+            publicKey = "pubkey123",
             isVerified = false,
             createdAt = 1000L,
         )
@@ -109,12 +120,35 @@ class OfflineContactRepositoryTest {
     }
 
     @Test
+    fun 名前のみ部分更新できる() = runTest {
+        val testDispatcher = UnconfinedTestDispatcher(testScheduler)
+        val dao = FakeContactDao()
+        val repository = OfflineContactRepository(dao, testDispatcher)
+
+        val initial = Contact(
+            deviceId = "dev-001",
+            name = "Alice",
+            publicKey = "pubkey123",
+            isVerified = true,
+            createdAt = 1000L,
+        )
+        repository.saveContact(initial)
+
+        repository.updateName("dev-001", "Alice New Name")
+
+        val retrieved = repository.getContact("dev-001")
+        assertEquals("Alice New Name", retrieved?.name)
+        assertEquals("pubkey123", retrieved?.publicKey)
+        assertEquals(true, retrieved?.isVerified)
+    }
+
+    @Test
     fun 連絡先を削除できる() = runTest {
         val testDispatcher = UnconfinedTestDispatcher(testScheduler)
         val dao = FakeContactDao()
         val repository = OfflineContactRepository(dao, testDispatcher)
 
-        val carol = Contact(deviceId = "dev-003", name = "Carol", createdAt = 1000L)
+        val carol = Contact(deviceId = "dev-003", name = "Carol", publicKey = "key", isVerified = false, createdAt = 1000L)
         repository.saveContact(carol)
 
         repository.deleteContact("dev-003")
@@ -133,6 +167,8 @@ class OfflineContactRepositoryTest {
         val contactWithoutTimestamp = Contact(
             deviceId = "dev-004",
             name = "Dave",
+            publicKey = "key",
+            isVerified = false,
             createdAt = 0L,
         )
         repository.saveContact(contactWithoutTimestamp)

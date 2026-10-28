@@ -36,6 +36,14 @@ class OfflineContactRepository(
         contactDao.upsert(updatedContact.toEntity())
     }
 
+    override suspend fun updateName(deviceId: String, name: String) {
+        contactDao.updateName(deviceId, name)
+    }
+
+    override suspend fun updateVerified(deviceId: String, isVerified: Boolean) {
+        contactDao.updateVerified(deviceId, isVerified)
+    }
+
     override suspend fun deleteContact(deviceId: String) {
         contactDao.deleteByDeviceId(deviceId)
     }

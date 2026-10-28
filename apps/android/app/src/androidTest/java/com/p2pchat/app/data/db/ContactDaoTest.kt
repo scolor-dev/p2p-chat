@@ -5,7 +5,7 @@ import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
@@ -32,7 +32,7 @@ class ContactDaoTest {
     }
 
     @Test
-    fun insertAndGetContact() = runTest {
+    fun insertAndGetContact() = runBlocking {
         val entity = ContactEntity(
             deviceId = "dev-101",
             name = "Alice",
@@ -47,7 +47,25 @@ class ContactDaoTest {
     }
 
     @Test
-    fun deleteContact() = runTest {
+    fun updateNameOnly() = runBlocking {
+        val entity = ContactEntity(
+            deviceId = "dev-103",
+            name = "Alice",
+            publicKey = "key123",
+            isVerified = true,
+            createdAt = 1000L,
+        )
+        dao.upsert(entity)
+        dao.updateName("dev-103", "Alice Renamed")
+
+        val retrieved = dao.getByDeviceId("dev-103")
+        assertEquals("Alice Renamed", retrieved?.name)
+        assertEquals("key123", retrieved?.publicKey)
+        assertEquals(true, retrieved?.isVerified)
+    }
+
+    @Test
+    fun deleteContact() = runBlocking {
         val entity = ContactEntity(
             deviceId = "dev-102",
             name = "Bob",
@@ -63,7 +81,7 @@ class ContactDaoTest {
     }
 
     @Test
-    fun observeAllSortedByNameAndDeviceId() = runTest {
+    fun observeAllSortedByNameAndDeviceId() = runBlocking {
         val bob = ContactEntity("dev-202", "Bob", "k2", false, 100L)
         val alice2 = ContactEntity("dev-201b", "Alice", "k1b", false, 100L)
         val alice1 = ContactEntity("dev-201a", "Alice", "k1a", true, 100L)

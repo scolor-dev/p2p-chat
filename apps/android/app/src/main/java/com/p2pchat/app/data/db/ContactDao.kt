@@ -17,6 +17,12 @@ interface ContactDao {
     @Upsert
     suspend fun upsert(contact: ContactEntity)
 
+    @Query("UPDATE contacts SET name = :name WHERE deviceId = :deviceId")
+    suspend fun updateName(deviceId: String, name: String)
+
+    @Query("UPDATE contacts SET isVerified = :isVerified WHERE deviceId = :deviceId")
+    suspend fun updateVerified(deviceId: String, isVerified: Boolean)
+
     @Query("DELETE FROM contacts WHERE deviceId = :deviceId")
     suspend fun deleteByDeviceId(deviceId: String)
 }

@@ -16,6 +16,12 @@ interface ContactRepository {
     /** 連絡先を保存（追加または更新）する。 */
     suspend fun saveContact(contact: Contact)
 
+    /** 指定された deviceId の連絡先名を更新する。 */
+    suspend fun updateName(deviceId: String, name: String)
+
+    /** 指定された deviceId の検証済み状態を更新する。 */
+    suspend fun updateVerified(deviceId: String, isVerified: Boolean)
+
     /** 指定された deviceId の連絡先を削除する。 */
     suspend fun deleteContact(deviceId: String)
 }
