@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    ローカル開発では、PC のサーバーに平文（http:// と ws://）でつなぐ。
+    接続先の IP アドレスはユーザーが入力するので、ドメインを絞らずに全体で許可している。
+    公開するときは、この許可を外す（cleartextTrafficPermitted を false にするか、このファイルを消す）。
+-->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="true" />
+</network-security-config>
