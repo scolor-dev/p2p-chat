@@ -8,4 +8,17 @@
     <string name="settings_title">設定</string>
     <string name="back">戻る</string>
     <string name="placeholder_message">準備中です</string>
+
+    <string name="settings_server_section">接続先のサーバー</string>
+    <string name="settings_host_label">IP アドレス</string>
+    <string name="settings_host_hint">PC の LAN IP（エミュレーターからは 10.0.2.2）</string>
+    <string name="settings_host_error">IP アドレスかホスト名だけを入力してください（http:// や :ポートは不要）</string>
+    <string name="settings_port_label">ポート</string>
+    <string name="settings_port_error">1〜65535 の数字を入力してください</string>
+    <string name="settings_save">保存</string>
+    <string name="settings_saved">保存済みです</string>
+    <string name="settings_test_connection">接続テスト</string>
+    <string name="settings_test_running">接続しています…</string>
+    <string name="settings_test_success">接続できました</string>
+    <string name="settings_test_failure">接続できませんでした（%1$s）</string>
 </resources>
