@@ -4,4 +4,7 @@ package com.p2pchat.app.data.contact
 data class Contact(
     val deviceId: String,
     val name: String,
+    val publicKey: String,
+    val isVerified: Boolean,
+    val createdAt: Long,
 )
