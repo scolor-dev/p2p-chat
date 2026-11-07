@@ -4,7 +4,7 @@ import android.content.Context
 import androidx.datastore.preferences.core.PreferenceDataStoreFactory
 import androidx.datastore.preferences.preferencesDataStoreFile
 import com.p2pchat.app.data.contact.ContactRepository
-import com.p2pchat.app.data.contact.InMemoryContactRepository
+import com.p2pchat.app.data.contact.OfflineContactRepository
 import com.p2pchat.app.data.db.AppDatabase
 import com.p2pchat.app.data.network.ApiClient
 import com.p2pchat.app.data.network.OkHttpApiClient
@@ -22,7 +22,7 @@ import java.util.concurrent.TimeUnit
  * 使う側（ViewModel）は、必要な部品だけをコンストラクターで受け取る。
  */
 class AppContainer(context: Context) {
-    /** 端末内の DB。まだ Repository からは使っていない（#19 で使う）。 */
+    /** 端末内の DB。 */
     val database: AppDatabase by lazy { AppDatabase.create(context) }
 
     /** 見本のため、今は固定のデータを返す実装。#22 で Room を使う実装に差し替える。 */
@@ -48,4 +48,8 @@ class AppContainer(context: Context) {
 
     /** WebSocket の部品。#20 で、この上にシグナリングの接続を作る。 */
     val webSocketClient: WebSocketClient by lazy { OkHttpWebSocketClient(okHttpClient) }
+    /** Room DB を使用する連絡先リポジトリ。 */
+    val contactRepository: ContactRepository by lazy {
+        OfflineContactRepository(database.contactDao())
+    }
 }

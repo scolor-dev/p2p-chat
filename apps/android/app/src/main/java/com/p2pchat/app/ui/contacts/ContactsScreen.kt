@@ -91,7 +91,10 @@ private fun ContactsContentPreview() {
     P2PChatTheme {
         ContactsContent(
             uiState = ContactsUiState(
-                contacts = listOf(Contact("a1b2c3d4e5f60718", "Alice"), Contact("0f1e2d3c4b5a6978", "Bob")),
+                contacts = listOf(
+                    Contact("a1b2c3d4e5f60718", "Alice", publicKey = "", isVerified = false, createdAt = 1000L),
+                    Contact("0f1e2d3c4b5a6978", "Bob", publicKey = "", isVerified = false, createdAt = 1000L),
+                ),
                 isLoading = false,
             ),
             onContactClick = {},
