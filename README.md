@@ -5,11 +5,13 @@ WebRTC による端末間 P2P 通信を行うチャットアプリ。
 ```text
 .
 ├── apps/
-│   └── android/        # Android アプリ（Kotlin）
+│   ├── android/        # Android アプリ（Kotlin）
+│   └── ios/            # iOS アプリ（Swift、MVP 対象外。雛形のみ）
 ├── services/
 │   └── signaling/      # シグナリングサーバー（Go）
+├── .github/workflows/  # CI、Backlog へのミラー
 └── docs/
-    ├── design.md       # MVP 設計（v0.1）：アーキテクチャ、通信フロー、API 仕様
+    ├── design.md       # MVP 設計（v0.2）：アーキテクチャ、通信フロー、API 仕様、開発の進め方
     ├── apps/
     │   └── android.md  # Android アプリの要件
     └── services/
