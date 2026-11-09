@@ -9,9 +9,10 @@ import androidx.room.RoomDatabase
  * 端末内の DB。テーブルを足すときは entities に加え、version を上げる。
  * 開発中はスキーマを書き出さない（exportSchema = false）。公開前にマイグレーションの方針を決める。
  */
-@Database(entities = [ContactEntity::class], version = 1, exportSchema = false)
+@Database(entities = [ContactEntity::class, MessageEntity::class], version = 2, exportSchema = false)
 abstract class AppDatabase : RoomDatabase() {
     abstract fun contactDao(): ContactDao
+    abstract fun messageDao(): MessageDao // ← 追加
 
     companion object {
         fun create(context: Context): AppDatabase =
