@@ -25,8 +25,10 @@ class AppContainer(context: Context) {
     /** 端末内の DB。 */
     val database: AppDatabase by lazy { AppDatabase.create(context) }
 
-    /** 見本のため、今は固定のデータを返す実装。#22 で Room を使う実装に差し替える。 */
-    val contactRepository: ContactRepository = InMemoryContactRepository()
+    /** Room DB を使用する連絡先リポジトリ。 */
+    val contactRepository: ContactRepository by lazy {
+        OfflineContactRepository(database.contactDao())
+    }
 
     /** 接続先のサーバー設定。DataStore は 1 つのファイルに 1 つだけ作る決まりなので、ここで持つ。 */
     val serverSettingsRepository: ServerSettingsRepository by lazy {
@@ -48,8 +50,4 @@ class AppContainer(context: Context) {
 
     /** WebSocket の部品。#20 で、この上にシグナリングの接続を作る。 */
     val webSocketClient: WebSocketClient by lazy { OkHttpWebSocketClient(okHttpClient) }
-    /** Room DB を使用する連絡先リポジトリ。 */
-    val contactRepository: ContactRepository by lazy {
-        OfflineContactRepository(database.contactDao())
-    }
 }
