@@ -2,12 +2,20 @@ package com.p2pchat.app.data.crypto
 
 import java.security.GeneralSecurityException
 import java.security.KeyFactory
+import java.security.PublicKey
 import java.security.SecureRandom
+import java.security.AlgorithmParameters
+import java.security.interfaces.ECPublicKey
+import java.security.spec.ECFieldFp
+import java.security.spec.ECGenParameterSpec
+import java.security.spec.ECParameterSpec
+import java.security.spec.ECPoint
 import java.security.spec.X509EncodedKeySpec
 import java.util.concurrent.ConcurrentHashMap
 import javax.crypto.Cipher
 import javax.crypto.spec.GCMParameterSpec
 import javax.crypto.spec.SecretKeySpec
+import kotlin.coroutines.cancellation.CancellationException
 
 /**
  * ECDH（P-256）→ HKDF-SHA256 → AES-256-GCM のメッセージ暗号化（設計書「メッセージの暗号化」）。
@@ -70,17 +78,24 @@ class AesGcmMessageCipher(
     }
 
     private fun deriveKey(publicKeyDer: ByteArray): SecretKeySpec {
-        val peerPublicKey = try {
-            KeyFactory.getInstance("EC").generatePublic(X509EncodedKeySpec(publicKeyDer))
-        } catch (e: GeneralSecurityException) {
-            throw MessageCryptoException(MessageCryptoException.Reason.INVALID_PEER_KEY, "相手の公開鍵が不正です", e)
-        }
+        val peerPublicKey = parsePeerPublicKey(publicKeyDer)
         val secret = try {
             sharedSecretProvider.deriveSecret(peerPublicKey)
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: GeneralSecurityException) {
+            throw MessageCryptoException(MessageCryptoException.Reason.KEY_AGREEMENT_FAILED, "共通鍵を作れませんでした", e)
+        } catch (e: RuntimeException) {
+            // privateKey() の IllegalStateException など。生の実行時例外を呼び出し側に漏らさない
             throw MessageCryptoException(MessageCryptoException.Reason.KEY_AGREEMENT_FAILED, "共通鍵を作れませんでした", e)
         }
         try {
+            if (secret.size != SHARED_SECRET_LENGTH) {
+                throw MessageCryptoException(
+                    MessageCryptoException.Reason.KEY_AGREEMENT_FAILED,
+                    "共有秘密の長さが不正です",
+                )
+            }
             val keyBytes = Hkdf.derive(secret, null, INFO, KEY_LENGTH)
             try {
                 return SecretKeySpec(keyBytes, "AES") // SecretKeySpec は内部にコピーを持つ
@@ -92,11 +107,52 @@ class AesGcmMessageCipher(
         }
     }
 
+    /**
+     * 相手の公開鍵（X.509 DER）を復元し、P-256 の曲線上の正しい点であることを確かめる。
+     * 満たさなければ [MessageCryptoException.Reason.INVALID_PEER_KEY]。
+     */
+    private fun parsePeerPublicKey(publicKeyDer: ByteArray): PublicKey {
+        val invalid = { cause: Throwable? ->
+            MessageCryptoException(MessageCryptoException.Reason.INVALID_PEER_KEY, "相手の公開鍵が不正です", cause)
+        }
+        val key = try {
+            KeyFactory.getInstance("EC").generatePublic(X509EncodedKeySpec(publicKeyDer))
+        } catch (e: GeneralSecurityException) {
+            throw invalid(e)
+        } catch (e: RuntimeException) {
+            throw invalid(e)
+        }
+        if (key !is ECPublicKey) throw invalid(null)
+        val params = key.params
+        // 曲線（体・a・b）、基準点、位数がすべて P-256 と同じであること
+        if (params.curve != P256.curve || params.generator != P256.generator || params.order != P256.order) {
+            throw invalid(null)
+        }
+        val w = key.w
+        if (w == ECPoint.POINT_INFINITY) throw invalid(null)
+        val curve = params.curve
+        val p = (curve.field as ECFieldFp).p
+        val x = w.affineX
+        val y = w.affineY
+        if (x.signum() < 0 || x >= p || y.signum() < 0 || y >= p) throw invalid(null)
+        // y^2 = x^3 + ax + b (mod p)
+        val left = y.multiply(y).mod(p)
+        val right = x.pow(3).add(curve.a.multiply(x)).add(curve.b).mod(p)
+        if (left != right) throw invalid(null)
+        return key
+    }
+
     companion object {
         const val NONCE_LENGTH = 12
+        private const val SHARED_SECRET_LENGTH = 32
         private const val TAG_BITS = 128
         private const val KEY_LENGTH = 32
         private const val TRANSFORMATION = "AES/GCM/NoPadding"
         private val INFO = "p2p-chat/v1/message".toByteArray(Charsets.UTF_8)
+
+        /** P-256 の基準パラメーター（JDK / Android の secp256r1。曲線・基準点・位数の比較に使う）。 */
+        private val P256: ECParameterSpec = AlgorithmParameters.getInstance("EC")
+            .apply { init(ECGenParameterSpec("secp256r1")) }
+            .getParameterSpec(ECParameterSpec::class.java)
     }
 }

@@ -6,6 +6,7 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertThrows
 import org.junit.Test
+import java.security.GeneralSecurityException
 import java.security.KeyPair
 import java.security.KeyPairGenerator
 import java.security.PublicKey
@@ -227,5 +228,61 @@ class AesGcmMessageCipherTest {
             a.cipher.decrypt(rotated, id, oldEncrypted)
         }
         assertNotEquals(0, oldEncrypted.ct.size)
+    }
+
+    @Test
+    fun P384の公開鍵はINVALID_PEER_KEYになる() {
+        val p384 = KeyPairGenerator.getInstance("EC")
+            .apply { initialize(ECGenParameterSpec("secp384r1")) }.generateKeyPair()
+
+        assertDecryptFails(MessageCryptoException.Reason.INVALID_PEER_KEY) {
+            a.cipher.encrypt(PeerKey("device-x", p384.public.encoded), id, plain)
+        }
+    }
+
+    @Test
+    fun 曲線上にない点はINVALID_PEER_KEYになる() {
+        // DER の末尾は y 座標の最下位バイト。1 ビット変えると曲線上の点ではなくなる
+        val der = b.publicKey.copyOf().also { it[it.size - 1] = (it[it.size - 1].toInt() xor 1).toByte() }
+
+        assertDecryptFails(MessageCryptoException.Reason.INVALID_PEER_KEY) {
+            a.cipher.encrypt(PeerKey("device-x", der), id, plain)
+        }
+    }
+
+    private class FailingProvider(private val error: Throwable) : SharedSecretProvider {
+        override fun deriveSecret(peerPublicKey: PublicKey): ByteArray = throw error
+    }
+
+    @Test
+    fun 共有秘密の計算が例外を投げたらKEY_AGREEMENT_FAILEDになる() {
+        val errors = listOf(GeneralSecurityException("x"), IllegalStateException("鍵ペアが無い"))
+        for (error in errors) {
+            val cipher = AesGcmMessageCipher(FailingProvider(error))
+
+            assertDecryptFails(MessageCryptoException.Reason.KEY_AGREEMENT_FAILED) {
+                cipher.encrypt(bFromA, id, plain)
+            }
+        }
+    }
+
+    @Test
+    fun 共有秘密が32バイトでなければKEY_AGREEMENT_FAILEDになる() {
+        val cipher = AesGcmMessageCipher(object : SharedSecretProvider {
+            override fun deriveSecret(peerPublicKey: PublicKey) = ByteArray(31)
+        })
+
+        assertDecryptFails(MessageCryptoException.Reason.KEY_AGREEMENT_FAILED) {
+            cipher.encrypt(bFromA, id, plain)
+        }
+    }
+
+    @Test
+    fun キャンセル例外は包まずにそのまま投げる() {
+        val cipher = AesGcmMessageCipher(FailingProvider(java.util.concurrent.CancellationException()))
+
+        assertThrows(java.util.concurrent.CancellationException::class.java) {
+            cipher.encrypt(bFromA, id, plain)
+        }
     }
 }
