@@ -59,13 +59,36 @@ class MessageCryptoException(
 /**
  * メッセージ本文を、相手ごとの共通鍵で暗号化・復号する部品（AES-256-GCM、AAD は id）。
  * 失敗は [MessageCryptoException] で返す（平文や空文字を返さない）。
+ *
+ * 使うときの注意:
+ * - 同じ相手への最初の呼び出しでは、Keystore の ECDH が走るので重い。メインスレッドから呼ばず、
+ *   `Dispatchers.Default` などから呼ぶこと（suspend にはしていない）。2 回目以降は共通鍵を使い回すので軽い。
+ * - `id` は、呼び出し側（#26）が正規の形（UUID）に限ること。Kotlin の `toByteArray(UTF_8)` は孤立サロゲートを
+ *   `?` に置き換えるため、任意の文字列を渡すと、別の `id` が同じ AAD になりうる。
+ * - [TokenCipher]（#18、端末内に token を保存するための暗号化）とは別物。こちらは端末間のメッセージ用。
  */
 interface MessageCipher {
     /** [plaintext] を暗号化する。nonce は毎回ランダム。 */
     @Throws(MessageCryptoException::class)
     fun encrypt(peer: PeerKey, id: String, plaintext: ByteArray): EncryptedMessage
 
-    /** 復号する。認証に失敗したら [MessageCryptoException]（[MessageCryptoException.Reason.DECRYPT_FAILED]）。 */
+    /**
+     * 復号する。認証に失敗したら [MessageCryptoException]（[MessageCryptoException.Reason.DECRYPT_FAILED]）。
+     *
+     * `ct` が [MAX_CT_BYTES]（16 KiB）を超えるものは、鍵を作る前に [MessageCryptoException.Reason.INVALID_INPUT] にする。
+     * メッセージ全体のサイズ上限を適用するのは #26 で、ここは暗号部品側の防御（巨大な入力で時間とメモリを使わない）。
+     */
     @Throws(MessageCryptoException::class)
     fun decrypt(peer: PeerKey, id: String, message: EncryptedMessage): ByteArray
+
+    /** [deviceId] の相手の共通鍵を、メモリから破棄する。連絡先の削除・再登録で使う。次に使うときは ECDH からやり直す。 */
+    fun clear(deviceId: String)
+
+    /** すべての相手の共通鍵を、メモリから破棄する。 */
+    fun clearAll()
+
+    companion object {
+        /** 復号する `ct`（暗号文＋タグ）の最大バイト数。設計書の「16 KiB 超は破棄」に合わせる。 */
+        const val MAX_CT_BYTES = 16 * 1024
+    }
 }

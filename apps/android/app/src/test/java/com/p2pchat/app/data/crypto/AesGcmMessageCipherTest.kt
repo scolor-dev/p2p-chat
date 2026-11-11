@@ -285,4 +285,48 @@ class AesGcmMessageCipherTest {
             cipher.encrypt(bFromA, id, plain)
         }
     }
+
+    @Test
+    fun ctはちょうど16KiBまで復号でき超えると失敗する() {
+        val limit = MessageCipher.MAX_CT_BYTES
+        // 平文 = 上限 - タグ 16 バイトで、ct がちょうど 16384 バイトになる
+        val atLimit = a.cipher.encrypt(bFromA, id, ByteArray(limit - 16))
+        assertEquals(limit, atLimit.ct.size)
+        assertEquals(limit - 16, b.cipher.decrypt(aFromB, id, atLimit).size)
+
+        val over = a.cipher.encrypt(bFromA, id, ByteArray(limit - 15))
+        assertEquals(limit + 1, over.ct.size)
+        assertDecryptFails(MessageCryptoException.Reason.INVALID_INPUT) {
+            b.cipher.decrypt(aFromB, id, over)
+        }
+    }
+
+    @Test
+    fun clearすると指定した相手だけECDHをやり直す() {
+        val c = Side(newKeyPair())
+        val cFromA = PeerKey("device-c", c.publicKey)
+        a.cipher.encrypt(bFromA, id, plain)
+        a.cipher.encrypt(cFromA, id, plain)
+        assertEquals(2, a.provider.calls)
+
+        a.cipher.clear("device-b")
+        a.cipher.encrypt(bFromA, id, plain)
+        a.cipher.encrypt(cFromA, id, plain)
+
+        assertEquals(3, a.provider.calls)
+    }
+
+    @Test
+    fun clearAllすると全員ECDHをやり直す() {
+        val c = Side(newKeyPair())
+        val cFromA = PeerKey("device-c", c.publicKey)
+        a.cipher.encrypt(bFromA, id, plain)
+        a.cipher.encrypt(cFromA, id, plain)
+
+        a.cipher.clearAll()
+        a.cipher.encrypt(bFromA, id, plain)
+        a.cipher.encrypt(cFromA, id, plain)
+
+        assertEquals(4, a.provider.calls)
+    }
 }

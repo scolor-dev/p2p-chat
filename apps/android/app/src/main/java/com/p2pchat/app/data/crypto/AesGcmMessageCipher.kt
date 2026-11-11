@@ -53,6 +53,9 @@ class AesGcmMessageCipher(
         if (message.nonce.size != NONCE_LENGTH) {
             throw MessageCryptoException(MessageCryptoException.Reason.INVALID_INPUT, "nonce の長さが不正です")
         }
+        if (message.ct.size > MessageCipher.MAX_CT_BYTES) {
+            throw MessageCryptoException(MessageCryptoException.Reason.INVALID_INPUT, "ct が大きすぎます")
+        }
         if (message.ct.size < TAG_BITS / 8) {
             throw MessageCryptoException(MessageCryptoException.Reason.INVALID_INPUT, "ct が短すぎます")
         }
@@ -65,6 +68,14 @@ class AesGcmMessageCipher(
         } catch (e: GeneralSecurityException) {
             throw MessageCryptoException(MessageCryptoException.Reason.DECRYPT_FAILED, "復号に失敗しました", e)
         }
+    }
+
+    override fun clear(deviceId: String) {
+        cache.remove(deviceId)
+    }
+
+    override fun clearAll() {
+        cache.clear()
     }
 
     /** 相手の共通鍵を返す。キャッシュにあり、公開鍵が同じならそれを使う。 */
@@ -100,6 +111,7 @@ class AesGcmMessageCipher(
             try {
                 return SecretKeySpec(keyBytes, "AES") // SecretKeySpec は内部にコピーを持つ
             } finally {
+                // SecretKeySpec 側のコピーは消せないので、これはベストエフォート
                 keyBytes.fill(0)
             }
         } finally {
