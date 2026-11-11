@@ -25,7 +25,8 @@ com.p2pchat.app/
 │   └── AppContainer.kt    # 部品（DB・Repository）をここで作って持つ（手動 DI）
 ├── data/              # データの取得・保存
 │   ├── contact/       #   Contact、ContactRepository（interface）、その実装
-│   ├── crypto/        #   Keystore の鍵（P-256、token 用の AES）、公開鍵の書き出し
+│   ├── crypto/        #   Keystore の鍵（P-256、token 用の AES）、公開鍵の書き出し、
+│   │                  #   メッセージの暗号化（ECDH → HKDF-SHA256 → AES-256-GCM、MessageCipher）
 │   ├── device/        #   端末の身元（deviceId、暗号化した token）の保存と、端末登録
 │   └── db/            #   Room（AppDatabase、Entity、Dao）
 └── ui/                # 画面
