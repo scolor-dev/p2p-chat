@@ -83,4 +83,17 @@ class HkdfTest {
             Hkdf.derive(ByteArray(1), null, ByteArray(0), 255 * 32 + 1)
         }
     }
+
+    @Test
+    fun 最大長255x32バイトを出せる() {
+        // カウンターは 1 バイトで、1 から 255 まで回る
+        val okm = Hkdf.derive(ByteArray(22) { 0x0b }, null, ByteArray(0), 255 * 32)
+
+        assertEquals(255 * 32, okm.size)
+        // 先頭の 42 バイトは、長さ 42 のときと同じ（RFC 5869 Test Case 3）
+        assertEquals(
+            "8da4e775a563c18f715f802a063c5a31b8a11f5c5ee1879ec3454e5f3c738d2d9d201395faa4b61a96c8",
+            okm.copyOf(42).toHex(),
+        )
+    }
 }

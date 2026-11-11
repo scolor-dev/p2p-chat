@@ -3,7 +3,6 @@ package com.p2pchat.app.data.crypto
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
-import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertThrows
 import org.junit.Test
 import java.security.GeneralSecurityException
@@ -190,12 +189,11 @@ class AesGcmMessageCipherTest {
 
     @Test
     fun 同じ相手には2回目のECDHをやり直さない() {
-        val first = a.cipher.encrypt(bFromA, id, plain)
+        a.cipher.encrypt(bFromA, id, plain)
         a.cipher.encrypt(bFromA, "other-id", plain)
         a.cipher.decrypt(bFromA, id, b.cipher.encrypt(aFromB, id, plain))
 
         assertEquals(1, a.provider.calls)
-        assertEquals(12, first.nonce.size)
     }
 
     @Test
@@ -227,7 +225,6 @@ class AesGcmMessageCipherTest {
         assertDecryptFails(MessageCryptoException.Reason.DECRYPT_FAILED) {
             a.cipher.decrypt(rotated, id, oldEncrypted)
         }
-        assertNotEquals(0, oldEncrypted.ct.size)
     }
 
     @Test

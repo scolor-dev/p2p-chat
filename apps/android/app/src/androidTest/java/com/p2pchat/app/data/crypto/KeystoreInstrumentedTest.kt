@@ -8,7 +8,9 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
+import java.security.KeyPairGenerator
 import java.security.KeyStore
+import java.security.spec.ECGenParameterSpec
 import javax.crypto.KeyAgreement
 
 /**
@@ -58,8 +60,8 @@ class KeystoreInstrumentedTest {
         val store = AndroidKeystoreDeviceKeyStore(ecAlias)
         val devicePublic = store.getOrCreatePublicKey()
         // 相手（JVM の P-256 鍵）
-        val peerPair = java.security.KeyPairGenerator.getInstance("EC")
-            .apply { initialize(java.security.spec.ECGenParameterSpec("secp256r1")) }
+        val peerPair = KeyPairGenerator.getInstance("EC")
+            .apply { initialize(ECGenParameterSpec("secp256r1")) }
             .generateKeyPair()
         val mine = AesGcmMessageCipher(EcdhSharedSecretProvider(store::privateKey))
         val theirs = AesGcmMessageCipher(EcdhSharedSecretProvider { peerPair.private })
