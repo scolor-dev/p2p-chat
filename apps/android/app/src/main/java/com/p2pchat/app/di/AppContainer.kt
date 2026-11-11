@@ -6,9 +6,12 @@ import androidx.datastore.preferences.preferencesDataStoreFile
 import com.p2pchat.app.data.contact.ContactRepository
 import com.p2pchat.app.data.contact.OfflineContactRepository
 import com.p2pchat.app.data.crypto.AesGcmTokenCipher
+import com.p2pchat.app.data.crypto.AesGcmMessageCipher
 import com.p2pchat.app.data.crypto.AndroidKeystoreAesKey
 import com.p2pchat.app.data.crypto.AndroidKeystoreDeviceKeyStore
 import com.p2pchat.app.data.crypto.DeviceKeyStore
+import com.p2pchat.app.data.crypto.EcdhSharedSecretProvider
+import com.p2pchat.app.data.crypto.MessageCipher
 import com.p2pchat.app.data.db.AppDatabase
 import com.p2pchat.app.data.device.DataStoreDeviceIdentityStore
 import com.p2pchat.app.data.device.DefaultDeviceRepository
@@ -59,8 +62,13 @@ class AppContainer(context: Context) {
     /** WebSocket の部品。#20 で、この上にシグナリングの接続を作る。 */
     val webSocketClient: WebSocketClient by lazy { OkHttpWebSocketClient(okHttpClient) }
 
-    /** この端末の鍵ペア（Keystore の P-256）。秘密鍵への参照を使うのは #21。 */
+    /** この端末の鍵ペア（Keystore の P-256）。秘密鍵への参照は [messageCipher] が使う。 */
     val deviceKeyStore: DeviceKeyStore by lazy { AndroidKeystoreDeviceKeyStore() }
+
+    /** メッセージ本文の暗号化・復号。相手ごとの共通鍵はメモリ上で使い回す。#26 が使う。 */
+    val messageCipher: MessageCipher by lazy {
+        AesGcmMessageCipher(EcdhSharedSecretProvider(deviceKeyStore::privateKey))
+    }
 
     /** deviceId と token の保存先。token は Keystore の AES-GCM 鍵で暗号化して置く。 */
     private val deviceIdentityStore: DeviceIdentityStore by lazy {

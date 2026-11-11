@@ -54,6 +54,25 @@ class KeystoreInstrumentedTest {
     }
 
     @Test
+    fun Keystoreの秘密鍵とJVMの鍵でメッセージを暗号化して復号できる() {
+        val store = AndroidKeystoreDeviceKeyStore(ecAlias)
+        val devicePublic = store.getOrCreatePublicKey()
+        // 相手（JVM の P-256 鍵）
+        val peerPair = java.security.KeyPairGenerator.getInstance("EC")
+            .apply { initialize(java.security.spec.ECGenParameterSpec("secp256r1")) }
+            .generateKeyPair()
+        val mine = AesGcmMessageCipher(EcdhSharedSecretProvider(store::privateKey))
+        val theirs = AesGcmMessageCipher(EcdhSharedSecretProvider { peerPair.private })
+        val id = "6f1c0e5e-1111-4222-8333-444455556666"
+        val plain = "こんにちは".toByteArray()
+
+        val encrypted = mine.encrypt(PeerKey("peer", peerPair.public.encoded), id, plain)
+        val decrypted = theirs.decrypt(PeerKey("me", devicePublic.encoded), id, encrypted)
+
+        assertTrue(plain.contentEquals(decrypted))
+    }
+
+    @Test
     fun tokenを暗号化して復号できる() {
         val aesKey = AndroidKeystoreAesKey(aesAlias)
         val cipher = AesGcmTokenCipher(aesKey::getOrCreate)
