@@ -201,4 +201,17 @@ class RegistrationViewModelTest {
         assertEquals("a1b2c3d4e5f60718", viewModel.uiState.value.registeredDeviceId)
         assertTrue(device.registerCalls.isEmpty())
     }
+
+    @Test
+    fun 想定外の例外でも登録中のまま固まらない() = runTest {
+        val device = FakeDeviceRepository(throwable = IllegalStateException("想定外"))
+        val viewModel = viewModel(device)
+        viewModel.onNameChange("Pixel 8")
+
+        viewModel.register()
+
+        assertFalse(viewModel.uiState.value.isRegistering)
+        assertEquals(RegistrationError.Network, viewModel.uiState.value.error)
+        assertNull(viewModel.uiState.value.registeredDeviceId)
+    }
 }

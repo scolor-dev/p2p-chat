@@ -12,6 +12,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlin.coroutines.cancellation.CancellationException
 
 /**
  * 起動時の最初の画面を決める。登録済みなら連絡先一覧、未登録なら登録画面。
@@ -24,9 +25,15 @@ class StartViewModel(deviceRepository: DeviceRepository) : ViewModel() {
 
     init {
         viewModelScope.launch {
-            _start.value =
+            _start.value = try {
                 if (deviceRepository.identity.first() != null) StartDestination.Contacts
                 else StartDestination.Registration
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                // 読めないときも、Loading のまま固まらせず、登録画面にする
+                StartDestination.Registration
+            }
         }
     }
 

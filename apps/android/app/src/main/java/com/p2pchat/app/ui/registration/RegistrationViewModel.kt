@@ -16,6 +16,7 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlin.coroutines.cancellation.CancellationException
 
 /**
  * 登録画面の ViewModel。名前を検証して、端末を登録する。
@@ -69,21 +70,32 @@ class RegistrationViewModel(
         // launch の前に立てる。続けて 2 回呼ばれても、2 回目はここで止まる
         _uiState.update { it.copy(isRegistering = true, error = null, nameError = null) }
         viewModelScope.launch {
-            val server = serverSettingsRepository.settings.first()
-            if (server == null) {
-                _uiState.update {
-                    it.copy(isRegistering = false, isServerConfigured = false, error = RegistrationError.ServerNotConfigured)
+            try {
+                val server = serverSettingsRepository.settings.first()
+                if (server == null) {
+                    _uiState.update {
+                        it.copy(
+                            isRegistering = false,
+                            isServerConfigured = false,
+                            error = RegistrationError.ServerNotConfigured,
+                        )
+                    }
+                    return@launch
                 }
-                return@launch
+                deviceRepository.register(server, name).fold(
+                    onSuccess = { identity ->
+                        _uiState.update { it.copy(isRegistering = false, registeredDeviceId = identity.deviceId) }
+                    },
+                    onFailure = { e ->
+                        _uiState.update { it.copy(isRegistering = false, error = e.toRegistrationError()) }
+                    },
+                )
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                // 想定外の例外でも、「登録中」のまま固まらないようにする（メッセージは出さない）
+                _uiState.update { it.copy(isRegistering = false, error = RegistrationError.Network) }
             }
-            deviceRepository.register(server, name).fold(
-                onSuccess = { identity ->
-                    _uiState.update { it.copy(isRegistering = false, registeredDeviceId = identity.deviceId) }
-                },
-                onFailure = { e ->
-                    _uiState.update { it.copy(isRegistering = false, error = e.toRegistrationError()) }
-                },
-            )
         }
     }
 
