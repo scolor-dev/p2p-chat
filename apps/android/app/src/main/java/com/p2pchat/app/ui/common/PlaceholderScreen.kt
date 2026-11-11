@@ -7,10 +7,12 @@ import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import com.p2pchat.app.R
 
@@ -22,9 +24,7 @@ fun PlaceholderScreen(title: String, message: String, onBack: () -> Unit) {
         topBar = {
             CenterAlignedTopAppBar(
                 title = { Text(title) },
-                navigationIcon = {
-                    TextButton(onClick = onBack) { Text(stringResource(R.string.back)) }
-                },
+                navigationIcon = { IconButton(onClick = onBack) { Icon(painter = painterResource(R.drawable.baseline_arrow_back_ios_new_24,), contentDescription = stringResource(R.string.back)) } },
             )
         },
     ) { innerPadding ->

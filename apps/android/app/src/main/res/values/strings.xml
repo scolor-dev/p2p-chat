@@ -8,4 +8,11 @@
     <string name="settings_title">設定</string>
     <string name="back">戻る</string>
     <string name="placeholder_message">準備中です</string>
+    <string name="contacts_load_error">連絡先を読み込めませんでした</string>
+    <string name="retry">再試行</string>
+    <string name="message_sending">送信中</string>
+    <string name="message_read">確認済み</string>
+    <string name="message_failed_retry">送信失敗・再送</string>
+    <string name="message_send_error">メッセージの送信に失敗しました</string>
+    <string name="message_unread">未確認のメッセージがあります</string>
 </resources>
