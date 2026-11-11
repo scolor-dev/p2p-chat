@@ -6,9 +6,13 @@ import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.emptyPreferences
 import androidx.datastore.preferences.core.stringPreferencesKey
 import com.p2pchat.app.data.crypto.TokenCipher
+import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.catch
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.withContext
 import java.io.IOException
 
 /**
@@ -24,6 +28,8 @@ import java.io.IOException
 class DataStoreDeviceIdentityStore(
     private val dataStore: DataStore<Preferences>,
     private val cipher: TokenCipher,
+    /** Keystore での暗号化・復号は重いので、メインスレッドでは行わず、ここで行う。 */
+    private val ioDispatcher: CoroutineDispatcher = Dispatchers.Default,
 ) : DeviceIdentityStore {
 
     override val identity: Flow<DeviceIdentity?> = dataStore.data
@@ -41,10 +47,11 @@ class DataStoreDeviceIdentityStore(
             }
             DeviceIdentity(deviceId, token)
         }
+        .flowOn(ioDispatcher)
 
     override suspend fun save(identity: DeviceIdentity) {
         // 暗号化に失敗したら、ここで例外になり、何も書かれない
-        val encrypted = cipher.encrypt(identity.token)
+        val encrypted = withContext(ioDispatcher) { cipher.encrypt(identity.token) }
         dataStore.edit { prefs ->
             prefs[DEVICE_ID] = identity.deviceId
             prefs[ENCRYPTED_TOKEN] = encrypted

@@ -5,10 +5,14 @@ import com.p2pchat.app.data.crypto.PublicKeyEncoder
 import com.p2pchat.app.data.network.ApiClient
 import com.p2pchat.app.data.network.ApiException
 import com.p2pchat.app.data.settings.ServerSettings
+import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
 import kotlin.coroutines.cancellation.CancellationException
 
 /**
@@ -20,6 +24,8 @@ class DefaultDeviceRepository(
     private val keyStore: DeviceKeyStore,
     private val apiClient: ApiClient,
     private val identityStore: DeviceIdentityStore,
+    /** Keystore の鍵生成や暗号化は重いので、メインスレッドでは行わず、ここで行う。 */
+    private val ioDispatcher: CoroutineDispatcher = Dispatchers.Default,
 ) : DeviceRepository {
 
     /** 登録を同時に 2 つ走らせない（二重登録で deviceId が 2 つできるのを防ぐ）。 */
@@ -32,7 +38,7 @@ class DefaultDeviceRepository(
             identityStore.identity.first()?.let { return@withLock Result.success(it) }
 
             val publicKey = try {
-                PublicKeyEncoder.toBase64(keyStore.getOrCreatePublicKey())
+                withContext(ioDispatcher) { PublicKeyEncoder.toBase64(keyStore.getOrCreatePublicKey()) }
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
@@ -49,7 +55,8 @@ class DefaultDeviceRepository(
 
             val identity = DeviceIdentity(registered.deviceId, registered.token)
             try {
-                identityStore.save(identity)
+                // token はこのレスポンスでしか返らない。呼び出し元がキャンセルされても、保存は最後までやる
+                withContext(ioDispatcher + NonCancellable) { identityStore.save(identity) }
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {

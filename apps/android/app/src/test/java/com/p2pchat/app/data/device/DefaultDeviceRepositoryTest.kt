@@ -5,7 +5,12 @@ import com.p2pchat.app.data.network.ApiClient
 import com.p2pchat.app.data.network.ApiException
 import com.p2pchat.app.data.network.RegisteredDevice
 import com.p2pchat.app.data.settings.ServerSettings
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
@@ -19,6 +24,7 @@ import java.security.PublicKey
 import java.security.spec.ECGenParameterSpec
 import java.util.Base64
 
+@OptIn(ExperimentalCoroutinesApi::class)
 class DefaultDeviceRepositoryTest {
     private val pair = KeyPairGenerator.getInstance("EC").run {
         initialize(ECGenParameterSpec("secp256r1"))
@@ -38,12 +44,15 @@ class DefaultDeviceRepositoryTest {
 
     private class FakeApiClient(
         var result: Result<RegisteredDevice> = Result.success(RegisteredDevice("dev0000000000001", "tok")),
+        /** 設定すると、registerDevice がこれが完了するまで止まる。 */
+        var gate: CompletableDeferred<Unit>? = null,
     ) : ApiClient {
         val registerCalls = mutableListOf<Triple<ServerSettings, String, String>>()
         override suspend fun healthz(server: ServerSettings): Result<Unit> = Result.success(Unit)
         override suspend fun registerDevice(server: ServerSettings, name: String, publicKey: String):
             Result<RegisteredDevice> {
             registerCalls += Triple(server, name, publicKey)
+            gate?.await()
             return result
         }
     }
@@ -51,9 +60,12 @@ class DefaultDeviceRepositoryTest {
     private class FakeIdentityStore(
         initial: DeviceIdentity? = null,
         var failSave: Boolean = false,
+        /** 設定すると、save がこれが完了するまで止まる。 */
+        var saveGate: CompletableDeferred<Unit>? = null,
     ) : DeviceIdentityStore {
         override val identity = MutableStateFlow(initial)
         override suspend fun save(identity: DeviceIdentity) {
+            saveGate?.await()
             if (failSave) throw IOException("書き込めない")
             this.identity.value = identity
         }
@@ -65,7 +77,7 @@ class DefaultDeviceRepositoryTest {
         keyStore: FakeKeyStore = FakeKeyStore(pair),
         api: FakeApiClient = FakeApiClient(),
         store: FakeIdentityStore = FakeIdentityStore(),
-    ) = DefaultDeviceRepository(keyStore, api, store)
+    ) = DefaultDeviceRepository(keyStore, api, store, UnconfinedTestDispatcher())
 
     @Test
     fun 登録に成功すると公開鍵を送り身元を保存する() = runTest {
@@ -149,5 +161,38 @@ class DefaultDeviceRepositoryTest {
 
         assertTrue(!e.toString().contains("secrettoken"))
         assertTrue(!RegisteredDevice("d", "secrettoken").toString().contains("secrettoken"))
+    }
+
+    @Test
+    fun 同時に2回呼んでも通信は1回で同じ身元を返す() = runTest {
+        val gate = CompletableDeferred<Unit>()
+        val api = FakeApiClient(gate = gate)
+        val repository = repository(api = api)
+
+        val first = async { repository.register(server, "Pixel 8") }
+        val second = async { repository.register(server, "Pixel 8") }
+        // 1 つ目が通信の応答待ちで止まり、2 つ目が同時に登録を始めようとしている状態にする
+        testScheduler.runCurrent()
+        gate.complete(Unit)
+
+        assertEquals(1, api.registerCalls.size)
+        assertEquals(first.await().getOrThrow(), second.await().getOrThrow())
+    }
+
+    @Test
+    fun サーバー応答後に呼び出しがキャンセルされても保存は完了する() = runTest {
+        val saveGate = CompletableDeferred<Unit>()
+        val store = FakeIdentityStore(saveGate = saveGate)
+        val repository = repository(store = store)
+
+        val job = launch { repository.register(server, "Pixel 8") }
+        testScheduler.runCurrent()
+        // ここで save の途中（ゲート待ち）で止まっている
+        job.cancel()
+        saveGate.complete(Unit)
+        job.join()
+        testScheduler.advanceUntilIdle()
+
+        assertEquals(DeviceIdentity("dev0000000000001", "tok"), store.identity.value)
     }
 }

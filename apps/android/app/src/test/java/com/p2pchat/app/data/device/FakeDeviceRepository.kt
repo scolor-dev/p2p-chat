@@ -12,6 +12,8 @@ class FakeDeviceRepository(
     initial: DeviceIdentity? = null,
     var result: Result<DeviceIdentity> = Result.success(DeviceIdentity("newdevice00000001", "newtoken")),
     var gate: CompletableDeferred<Unit>? = null,
+    /** 設定すると、register がこの例外を投げる（想定外の例外のテスト用）。 */
+    var throwable: Throwable? = null,
 ) : DeviceRepository {
     override val identity = MutableStateFlow(initial)
 
@@ -21,6 +23,7 @@ class FakeDeviceRepository(
     override suspend fun register(server: ServerSettings, name: String): Result<DeviceIdentity> {
         registerCalls += server to name
         gate?.await()
+        throwable?.let { throw it }
         result.onSuccess { identity.value = it }
         return result
     }
