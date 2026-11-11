@@ -14,4 +14,13 @@ object PublicKeyEncoder {
         require(publicKey.format == "X.509") { "公開鍵の形式が X.509 ではありません" }
         return Base64.getEncoder().encodeToString(publicKey.encoded)
     }
+
+    /**
+     * [toBase64] の逆。base64 の文字列を、X.509 DER のバイト列に戻す（`PeerKey.publicKey` にそのまま渡せる）。
+     * 連絡先の `publicKey`（base64 文字列）から `PeerKey` を作る #26 が使う。
+     *
+     * base64 として不正（文字や長さが違う）なら [IllegalArgumentException]。鍵として正しいかどうかは、
+     * ここでは見ない（暗号化のときに `INVALID_PEER_KEY` になる）。
+     */
+    fun fromBase64(text: String): ByteArray = Base64.getDecoder().decode(text)
 }

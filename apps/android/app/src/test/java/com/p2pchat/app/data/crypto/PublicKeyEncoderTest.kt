@@ -3,6 +3,7 @@ package com.p2pchat.app.data.crypto
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertThrows
 import org.junit.Test
 import java.security.KeyPairGenerator
 import java.security.PublicKey
@@ -36,5 +37,17 @@ class PublicKeyEncoderTest {
         assertArrayEquals(key.encoded, Base64.getDecoder().decode(text))
         assertFalse(text.contains("\n"))
         assertEquals(java.util.Base64.getEncoder().encodeToString(key.encoded), text)
+    }
+
+    @Test
+    fun toBase64とfromBase64で往復できる() {
+        val key = p256PublicKey()
+
+        assertArrayEquals(key.encoded, PublicKeyEncoder.fromBase64(PublicKeyEncoder.toBase64(key)))
+    }
+
+    @Test
+    fun 不正なbase64はIllegalArgumentExceptionになる() {
+        assertThrows(IllegalArgumentException::class.java) { PublicKeyEncoder.fromBase64("これは!base64ではない") }
     }
 }
