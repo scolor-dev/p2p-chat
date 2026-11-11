@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.CenterAlignedTopAppBar
@@ -134,6 +135,13 @@ fun SettingsContent(
                 Text(stringResource(R.string.settings_saved), style = MaterialTheme.typography.bodySmall)
             }
             ConnectionTestResult(uiState.connectionTest)
+            Text(stringResource(R.string.settings_device_section), style = MaterialTheme.typography.titleMedium)
+            SelectionContainer {
+                Text(
+                    text = uiState.deviceId?.let { stringResource(R.string.settings_device_id_label, it) }
+                        ?: stringResource(R.string.settings_device_not_registered),
+                )
+            }
         }
     }
 }

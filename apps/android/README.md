@@ -25,10 +25,13 @@ com.p2pchat.app/
 │   └── AppContainer.kt    # 部品（DB・Repository）をここで作って持つ（手動 DI）
 ├── data/              # データの取得・保存
 │   ├── contact/       #   Contact、ContactRepository（interface）、その実装
+│   ├── crypto/        #   Keystore の鍵（P-256、token 用の AES）、公開鍵の書き出し
+│   ├── device/        #   端末の身元（deviceId、暗号化した token）の保存と、端末登録
 │   └── db/            #   Room（AppDatabase、Entity、Dao）
 └── ui/                # 画面
     ├── navigation/    #   Routes.kt（行き先）、AppNavGraph.kt（画面のつながり）
     ├── contacts/      #   連絡先一覧。MVVM の見本
+    ├── registration/  #   初回の端末登録（名前を入力して POST /devices）
     ├── chat/ qr/ settings/   # 仮画面。各 Issue で本実装にする
     ├── common/        #   画面をまたいで使う部品
     └── theme/

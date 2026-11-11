@@ -53,6 +53,7 @@ dependencies {
     implementation(libs.androidx.room.ktx)
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.11.0")
     implementation(libs.kotlinx.serialization.core)
+    implementation(libs.kotlinx.serialization.json)
     implementation(libs.okhttp)
     implementation(libs.androidx.datastore.preferences)
     ksp(libs.androidx.room.compiler)

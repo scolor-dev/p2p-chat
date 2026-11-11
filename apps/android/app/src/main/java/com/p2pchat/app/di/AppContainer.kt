@@ -5,7 +5,15 @@ import androidx.datastore.preferences.core.PreferenceDataStoreFactory
 import androidx.datastore.preferences.preferencesDataStoreFile
 import com.p2pchat.app.data.contact.ContactRepository
 import com.p2pchat.app.data.contact.OfflineContactRepository
+import com.p2pchat.app.data.crypto.AesGcmTokenCipher
+import com.p2pchat.app.data.crypto.AndroidKeystoreAesKey
+import com.p2pchat.app.data.crypto.AndroidKeystoreDeviceKeyStore
+import com.p2pchat.app.data.crypto.DeviceKeyStore
 import com.p2pchat.app.data.db.AppDatabase
+import com.p2pchat.app.data.device.DataStoreDeviceIdentityStore
+import com.p2pchat.app.data.device.DefaultDeviceRepository
+import com.p2pchat.app.data.device.DeviceIdentityStore
+import com.p2pchat.app.data.device.DeviceRepository
 import com.p2pchat.app.data.network.ApiClient
 import com.p2pchat.app.data.network.OkHttpApiClient
 import com.p2pchat.app.data.network.OkHttpWebSocketClient
@@ -50,4 +58,23 @@ class AppContainer(context: Context) {
 
     /** WebSocket の部品。#20 で、この上にシグナリングの接続を作る。 */
     val webSocketClient: WebSocketClient by lazy { OkHttpWebSocketClient(okHttpClient) }
+
+    /** この端末の鍵ペア（Keystore の P-256）。秘密鍵への参照を使うのは #21。 */
+    val deviceKeyStore: DeviceKeyStore by lazy { AndroidKeystoreDeviceKeyStore() }
+
+    /** deviceId と token の保存先。token は Keystore の AES-GCM 鍵で暗号化して置く。 */
+    private val deviceIdentityStore: DeviceIdentityStore by lazy {
+        val aesKey = AndroidKeystoreAesKey()
+        DataStoreDeviceIdentityStore(
+            dataStore = PreferenceDataStoreFactory.create {
+                context.preferencesDataStoreFile(DataStoreDeviceIdentityStore.FILE_NAME)
+            },
+            cipher = AesGcmTokenCipher(aesKey::getOrCreate),
+        )
+    }
+
+    /** 端末の身元（deviceId）と登録。#20、#23 は、ここから deviceId と token を読む。 */
+    val deviceRepository: DeviceRepository by lazy {
+        DefaultDeviceRepository(deviceKeyStore, apiClient, deviceIdentityStore)
+    }
 }
