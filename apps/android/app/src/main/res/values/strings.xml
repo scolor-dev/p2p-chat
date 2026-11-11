@@ -21,4 +21,25 @@
     <string name="settings_test_running">接続しています…</string>
     <string name="settings_test_success">接続できました</string>
     <string name="settings_test_failure">接続できませんでした（%1$s）</string>
+
+    <string name="registration_title">端末の登録</string>
+    <string name="registration_description">この端末をサーバーに登録します。名前は相手に表示されます。</string>
+    <string name="registration_name_label">端末の名前</string>
+    <string name="registration_name_hint">1〜64 文字（例: Pixel 8）</string>
+    <string name="registration_name_error_empty">名前を入力してください</string>
+    <string name="registration_name_error_too_long">名前は 64 文字までです</string>
+    <string name="registration_register">登録する</string>
+    <string name="registration_server_not_configured">接続先のサーバーが設定されていません。設定画面で入力してください。</string>
+    <string name="registration_open_settings">設定画面を開く</string>
+    <string name="registration_error_key">鍵を準備できませんでした。もう一度試してください。</string>
+    <string name="registration_error_network">サーバーに接続できませんでした。接続先の設定とネットワークを確かめてください。</string>
+    <string name="registration_error_rejected">サーバーに登録を拒否されました（%1$s）</string>
+    <string name="registration_error_storage">端末への保存に失敗したため、登録を完了できませんでした。もう一度登録してください（サーバーには使われなかった登録が 1 件残ります）。</string>
+    <string name="registration_done">登録しました</string>
+    <string name="registration_device_id_label">この端末の ID</string>
+    <string name="registration_continue">はじめる</string>
+
+    <string name="settings_device_section">この端末</string>
+    <string name="settings_device_id_label">端末 ID: %1$s</string>
+    <string name="settings_device_not_registered">未登録</string>
 </resources>

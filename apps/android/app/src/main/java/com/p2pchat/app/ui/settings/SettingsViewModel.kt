@@ -6,6 +6,7 @@ import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import com.p2pchat.app.P2PChatApp
+import com.p2pchat.app.data.device.DeviceRepository
 import com.p2pchat.app.data.network.ApiClient
 import com.p2pchat.app.data.settings.ServerSettings
 import com.p2pchat.app.data.settings.ServerSettingsRepository
@@ -24,6 +25,7 @@ import kotlinx.coroutines.launch
 class SettingsViewModel(
     private val repository: ServerSettingsRepository,
     private val apiClient: ApiClient,
+    private val deviceRepository: DeviceRepository,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(SettingsUiState())
@@ -39,6 +41,15 @@ class SettingsViewModel(
                     port = (saved?.port ?: ServerSettings.DEFAULT_PORT).toString(),
                     isSaved = saved != null,
                 )
+            }
+        }
+    }
+
+    init {
+        // この端末の deviceId を表示する（未登録なら null）
+        viewModelScope.launch {
+            deviceRepository.identity.collect { identity ->
+                _uiState.update { it.copy(deviceId = identity?.deviceId) }
             }
         }
     }
@@ -97,7 +108,11 @@ class SettingsViewModel(
         val Factory = viewModelFactory {
             initializer {
                 val app = this[APPLICATION_KEY] as P2PChatApp
-                SettingsViewModel(app.container.serverSettingsRepository, app.container.apiClient)
+                SettingsViewModel(
+                    app.container.serverSettingsRepository,
+                    app.container.apiClient,
+                    app.container.deviceRepository,
+                )
             }
         }
     }

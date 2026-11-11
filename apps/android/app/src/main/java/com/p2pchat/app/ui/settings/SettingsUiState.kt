@@ -12,6 +12,8 @@ data class SettingsUiState(
     /** 入力中の値が保存済みの値と同じなら true。 */
     val isSaved: Boolean = false,
     val connectionTest: ConnectionTestState = ConnectionTestState.Idle,
+    /** この端末の `deviceId`。未登録なら null。 */
+    val deviceId: String? = null,
 )
 
 /** 接続テスト（`GET /healthz`）の状態。 */

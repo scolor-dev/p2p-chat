@@ -17,3 +17,6 @@ data object Qr
 
 @Serializable
 data object Settings
+
+@Serializable
+data object Registration
