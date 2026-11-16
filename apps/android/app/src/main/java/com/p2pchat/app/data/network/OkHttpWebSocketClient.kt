@@ -42,7 +42,7 @@ class OkHttpWebSocketClient(
             }
 
             override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
-                trySend(WebSocketEvent.Failure(t))
+                trySend(WebSocketEvent.Failure(t, response?.code))
                 channel.close()
             }
         })

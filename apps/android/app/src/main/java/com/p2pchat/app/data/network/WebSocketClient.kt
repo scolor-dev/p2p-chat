@@ -6,7 +6,7 @@ import kotlinx.coroutines.flow.Flow
  * WebSocket の最小限の部品。接続して、文字列を送受信するだけ。
  *
  * 認証（`Authorization` ヘッダー）、`ready` 待ち、再接続、メッセージの型は、
- * この部品の上に #20 で作る。
+ * この部品の上の [com.p2pchat.app.data.signaling.SignalingClient] が持つ。
  */
 interface WebSocketClient {
     /**
@@ -28,5 +28,10 @@ sealed interface WebSocketEvent {
     data class Opened(val session: WebSocketSession) : WebSocketEvent
     data class Message(val text: String) : WebSocketEvent
     data class Closed(val code: Int, val reason: String) : WebSocketEvent
-    data class Failure(val error: Throwable) : WebSocketEvent
+
+    /**
+     * つながらなかった、または通信中に失敗した。
+     * [httpStatus] は、接続（アップグレード）のときにサーバーが返した HTTP の状態コード（`401` など）。応答がなければ null。
+     */
+    data class Failure(val error: Throwable, val httpStatus: Int? = null) : WebSocketEvent
 }

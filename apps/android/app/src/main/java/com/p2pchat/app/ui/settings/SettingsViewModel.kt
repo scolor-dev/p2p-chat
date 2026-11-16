@@ -10,6 +10,7 @@ import com.p2pchat.app.data.device.DeviceRepository
 import com.p2pchat.app.data.network.ApiClient
 import com.p2pchat.app.data.settings.ServerSettings
 import com.p2pchat.app.data.settings.ServerSettingsRepository
+import com.p2pchat.app.data.signaling.SignalingClient
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -26,6 +27,7 @@ class SettingsViewModel(
     private val repository: ServerSettingsRepository,
     private val apiClient: ApiClient,
     private val deviceRepository: DeviceRepository,
+    private val signalingClient: SignalingClient,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(SettingsUiState())
@@ -50,6 +52,15 @@ class SettingsViewModel(
         viewModelScope.launch {
             deviceRepository.identity.collect { identity ->
                 _uiState.update { it.copy(deviceId = identity?.deviceId) }
+            }
+        }
+    }
+
+    init {
+        // シグナリングの接続状態を表示する
+        viewModelScope.launch {
+            signalingClient.state.collect { state ->
+                _uiState.update { it.copy(signalingState = state) }
             }
         }
     }
@@ -112,6 +123,7 @@ class SettingsViewModel(
                     app.container.serverSettingsRepository,
                     app.container.apiClient,
                     app.container.deviceRepository,
+                    app.container.signalingClient,
                 )
             }
         }

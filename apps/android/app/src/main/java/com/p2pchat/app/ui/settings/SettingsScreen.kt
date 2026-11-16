@@ -34,6 +34,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.p2pchat.app.R
+import com.p2pchat.app.data.signaling.SignalingState
 import com.p2pchat.app.ui.theme.P2PChatTheme
 
 /** 設定画面の入口。接続先のサーバー（IP アドレスとポート）を入力・保存し、接続を試せる。 */
@@ -135,6 +136,8 @@ fun SettingsContent(
                 Text(stringResource(R.string.settings_saved), style = MaterialTheme.typography.bodySmall)
             }
             ConnectionTestResult(uiState.connectionTest)
+            Text(stringResource(R.string.settings_signaling_section), style = MaterialTheme.typography.titleMedium)
+            SignalingStatus(uiState.signalingState)
             Text(stringResource(R.string.settings_device_section), style = MaterialTheme.typography.titleMedium)
             SelectionContainer {
                 Text(
@@ -168,6 +171,30 @@ private fun ConnectionTestResult(state: ConnectionTestState) {
     }
 }
 
+/** シグナリングの接続状態。ready なら主色、つながらない理由があればエラー色で出す。 */
+@Composable
+private fun SignalingStatus(state: SignalingState) {
+    val (text, color) = when (state) {
+        SignalingState.Stopped ->
+            stringResource(R.string.signaling_stopped) to MaterialTheme.colorScheme.onSurfaceVariant
+        SignalingState.NotConfigured ->
+            stringResource(R.string.signaling_not_configured) to MaterialTheme.colorScheme.onSurfaceVariant
+        is SignalingState.Connecting ->
+            stringResource(R.string.signaling_connecting, state.attempt) to MaterialTheme.colorScheme.onSurfaceVariant
+        is SignalingState.Ready ->
+            stringResource(R.string.signaling_ready) to MaterialTheme.colorScheme.primary
+        is SignalingState.WaitingToReconnect -> stringResource(
+            R.string.signaling_waiting,
+            // 1 秒未満でも 0 秒と出さないように切り上げる
+            ((state.delayMillis + 999) / 1000).toInt(),
+            state.reason ?: stringResource(R.string.signaling_unknown_reason),
+        ) to MaterialTheme.colorScheme.error
+        SignalingState.Unauthorized ->
+            stringResource(R.string.signaling_unauthorized) to MaterialTheme.colorScheme.error
+    }
+    Text(text = text, color = color)
+}
+
 @Preview(showBackground = true)
 @Composable
 private fun SettingsContentPreview() {
@@ -179,6 +206,8 @@ private fun SettingsContentPreview() {
                 port = "8080",
                 isSaved = true,
                 connectionTest = ConnectionTestState.Success,
+                deviceId = "a1b2c3d4e5f60718",
+                signalingState = SignalingState.Ready("a1b2c3d4e5f60718"),
             ),
             onBack = {},
             onHostChange = {},

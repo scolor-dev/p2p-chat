@@ -80,6 +80,22 @@ class OkHttpWebSocketClientTest {
         }
 
         assertEquals(1, events.size)
-        assertTrue(events.single() is WebSocketEvent.Failure)
+        val failure = events.single() as WebSocketEvent.Failure
+        assertEquals(null, failure.httpStatus)
+    }
+
+    @Test
+    fun サーバーが401で拒否したら状態コード付きのFailureを流す() = runBlocking {
+        server.enqueue(MockResponse.Builder().code(401).body("unauthorized").build())
+        val url = server.url("/ws").toString().replaceFirst("http://", "ws://")
+
+        val events = withTimeout(5_000) {
+            val received = mutableListOf<WebSocketEvent>()
+            client.connect(url).collect { received += it }
+            received
+        }
+
+        val failure = events.single() as WebSocketEvent.Failure
+        assertEquals(401, failure.httpStatus)
     }
 }
