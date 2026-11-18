@@ -27,6 +27,8 @@ class ContactsViewModel(
                         ContactListItemUiModel(
                             deviceId = contact.deviceId,
                             name = contact.name,
+                            publicKey = contact.publicKey,
+                            isVerified = contact.isVerified,
 
                             // TODO: 実際の最新メッセージへ差し替える
                             latestMessage = "ここにメッセージ内容が入ります",

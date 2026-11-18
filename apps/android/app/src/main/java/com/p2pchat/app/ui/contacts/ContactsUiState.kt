@@ -11,6 +11,8 @@ data class ContactsUiState(
 data class ContactListItemUiModel(
     val deviceId: String,
     val name: String,
+    val publicKey: String,
+    val isVerified: Boolean,
     val latestMessage: String,
     val isUnread: Boolean,
     val sendError: Boolean,
