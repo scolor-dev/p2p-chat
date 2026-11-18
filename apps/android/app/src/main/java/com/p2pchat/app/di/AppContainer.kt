@@ -21,5 +21,5 @@ class AppContainer(context: Context) {
     val contactRepository: ContactRepository = InMemoryContactRepository()
 
     /** メッセージリポジトリ（Room を用いた実装） */
-    val messageRepository: MessageRepository = RoomMessageRepository(database.messageDao())
+    val messageRepository: MessageRepository by lazy { RoomMessageRepository(database.messageDao()) }
 }

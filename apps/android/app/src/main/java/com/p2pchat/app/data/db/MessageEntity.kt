@@ -22,7 +22,7 @@ data class MessageEntity(
         deviceId = deviceId,
         direction = runCatching { MessageDirection.valueOf(direction) }.getOrDefault(MessageDirection.SENT),
         body = body,
-        status = runCatching { MessageStatus.valueOf(status) }.getOrDefault(MessageStatus.SENDING),
+        status = runCatching { MessageStatus.valueOf(status) }.getOrDefault(MessageStatus.FAILED),
         sentAt = sentAt,
     )
 
