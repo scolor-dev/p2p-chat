@@ -46,6 +46,16 @@
     <string name="registration_device_id_label">この端末の ID</string>
     <string name="registration_continue">はじめる</string>
 
+    <string name="settings_signaling_section">サーバーとの接続</string>
+    <string name="signaling_stopped">停止中</string>
+    <string name="signaling_not_configured">未接続（接続先の設定と端末の登録が必要です）</string>
+    <string name="signaling_connecting">接続しています…（%1$d 回目）</string>
+    <string name="signaling_ready">接続済み（ready）</string>
+    <string name="signaling_waiting">%1$d 秒後に再接続します（%2$s）</string>
+    <string name="signaling_unknown_reason">切断されました</string>
+    <string name="signaling_reason_closed">切断されました（%1$d）</string>
+    <string name="signaling_reason_ready_timeout">ready が届きませんでした</string>
+    <string name="signaling_unauthorized">認証に失敗しました。端末の登録をやり直す必要があります</string>
     <string name="settings_device_section">この端末</string>
     <string name="settings_device_id_label">端末 ID: %1$s</string>
     <string name="settings_device_not_registered">未登録</string>
