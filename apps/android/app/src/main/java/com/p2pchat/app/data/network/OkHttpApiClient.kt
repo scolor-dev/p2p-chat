@@ -6,6 +6,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
+import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -57,6 +58,36 @@ class OkHttpApiClient(
         }
     }
 
+    override suspend fun getDevice(server: ServerSettings, deviceId: String): Result<RemoteDevice> =
+        withContext(ioDispatcher) {
+            try {
+                // 入力された ID に「/」などが含まれても、別のパスにならないよう 1 区間として組み立てる
+                val url = "${server.httpBaseUrl}/devices".toHttpUrl().newBuilder().addPathSegment(deviceId).build()
+                val request = Request.Builder().url(url).get().build()
+                client.newCall(request).execute().use { response ->
+                    val text = response.body.string()
+                    when {
+                        response.code == 200 -> Result.success(parseDevice(text))
+                        else -> Result.failure(parseError(response.code, text))
+                    }
+                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                Result.failure(e)
+            }
+        }
+
+    private fun parseDevice(text: String): RemoteDevice {
+        val parsed = try {
+            json.decodeFromString<DeviceResponse>(text)
+        } catch (e: Exception) {
+            throw IOException("サーバーの応答を読めませんでした")
+        }
+        if (parsed.deviceId.isEmpty() || parsed.publicKey.isEmpty()) throw IOException("サーバーの応答が不完全です")
+        return RemoteDevice(parsed.deviceId, parsed.name, parsed.publicKey)
+    }
+
     /** 応答が読めないときの例外には、応答の中身（token を含みうる）を入れない。 */
     private fun parseRegistered(text: String): RegisteredDevice {
         val parsed = try {
@@ -82,6 +113,9 @@ class OkHttpApiClient(
 
     @Serializable
     private class RegisterResponse(val deviceId: String = "", val token: String = "")
+
+    @Serializable
+    private class DeviceResponse(val deviceId: String = "", val name: String = "", val publicKey: String = "")
 
     @Serializable
     private class ErrorResponse(val code: String? = null, val message: String? = null)

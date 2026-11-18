@@ -42,11 +42,12 @@ import com.p2pchat.app.ui.theme.P2PChatTheme
 fun ContactsScreen(
     onContactClick: (deviceId: String) -> Unit,
     onQrClick: () -> Unit,
+    onAddClick: () -> Unit,
     onSettingsClick: () -> Unit,
     viewModel: ContactsViewModel = viewModel(factory = ContactsViewModel.Factory),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
-    ContactsContent(uiState=uiState, onContactClick=onContactClick, onQrClick=onQrClick, onSettingsClick=onSettingsClick)
+    ContactsContent(uiState=uiState, onContactClick=onContactClick, onQrClick=onQrClick, onAddClick=onAddClick, onSettingsClick=onSettingsClick)
 }
 
 /** ViewModel を知らない、表示だけの部分。プレビューやテストで単独で使える。 */
@@ -56,6 +57,7 @@ fun ContactsContent(
     uiState: ContactsUiState,
     onContactClick: (deviceId: String) -> Unit,
     onQrClick: () -> Unit,
+    onAddClick: () -> Unit,
     onSettingsClick: () -> Unit,
 ) {
     Scaffold(
@@ -83,6 +85,12 @@ fun ContactsContent(
                     }
                 },
                 actions = {
+                    IconButton(onClick = onAddClick) {
+                        Icon(
+                            painter = painterResource(R.drawable.baseline_person_add_24),
+                            contentDescription = stringResource(R.string.add_contact_title),
+                        )
+                    }
                     IconButton(
                         onClick = onSettingsClick,
                     ) {
@@ -217,6 +225,7 @@ private fun ContactsContentPreview() {
             ),
             onContactClick = {},
             onQrClick = {},
+            onAddClick = {},
             onSettingsClick = {},
         )
     }
@@ -239,6 +248,7 @@ private fun ContactsLoadingPreview() {
             ),
             onContactClick = {},
             onQrClick = {},
+            onAddClick = {},
             onSettingsClick = {},
         )
     }
@@ -261,6 +271,7 @@ private fun ContactsEmptyPreview() {
             ),
             onContactClick = {},
             onQrClick = {},
+            onAddClick = {},
             onSettingsClick = {},
         )
     }

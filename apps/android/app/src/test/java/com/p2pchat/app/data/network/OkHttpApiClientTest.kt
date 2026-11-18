@@ -123,4 +123,60 @@ class OkHttpApiClientTest {
 
         assertTrue(result.exceptionOrNull() is IOException)
     }
+
+    @Test
+    fun getDeviceが200なら名前と公開鍵を返しGETで正しいパスを呼ぶ() = runTest {
+        server.enqueue(
+            MockResponse.Builder().code(200)
+                .body("""{"deviceId":"a1b2c3d4e5f60718","name":"Alice","publicKey":"MFkwEwYH","createdAt":"2026-11-01T00:00:00Z"}""")
+                .build(),
+        )
+
+        val result = apiClient.getDevice(serverSettings(), "a1b2c3d4e5f60718")
+
+        assertEquals(RemoteDevice("a1b2c3d4e5f60718", "Alice", "MFkwEwYH"), result.getOrThrow())
+        val request = server.takeRequest()
+        assertEquals("GET", request.method)
+        assertEquals("/devices/a1b2c3d4e5f60718", request.url.encodedPath)
+    }
+
+    @Test
+    fun getDeviceが404ならApiExceptionでstatusを返す() = runTest {
+        server.enqueue(
+            MockResponse.Builder().code(404).body("""{"code":"not-found","message":"device not found"}""").build(),
+        )
+
+        val e = apiClient.getDevice(serverSettings(), "nope").exceptionOrNull() as ApiException
+
+        assertEquals(404, e.status)
+        assertEquals("not-found", e.code)
+    }
+
+    @Test
+    fun getDeviceはIDにスラッシュがあっても1区間のパスとして送る() = runTest {
+        server.enqueue(MockResponse.Builder().code(404).build())
+
+        apiClient.getDevice(serverSettings(), "a/../healthz")
+
+        assertEquals("/devices/a%2F..%2Fhealthz", server.takeRequest().url.encodedPath)
+    }
+
+    @Test
+    fun getDeviceで応答が壊れていると失敗する() = runTest {
+        server.enqueue(MockResponse.Builder().code(200).body("""{"name":"x"}""").build())
+
+        val result = apiClient.getDevice(serverSettings(), "a1")
+
+        assertTrue(result.exceptionOrNull() is IOException)
+    }
+
+    @Test
+    fun getDeviceでサーバーに届かなければ失敗() = runTest {
+        val settings = serverSettings()
+        server.close()
+
+        val result = apiClient.getDevice(settings, "a1")
+
+        assertTrue(result.exceptionOrNull() is IOException)
+    }
 }
