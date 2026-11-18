@@ -32,7 +32,6 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.p2pchat.app.R
-import com.p2pchat.app.data.contact.Contact
 import com.p2pchat.app.ui.theme.P2PChatTheme
 
 /**
