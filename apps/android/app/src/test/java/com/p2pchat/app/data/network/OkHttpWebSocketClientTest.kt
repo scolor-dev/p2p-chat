@@ -13,6 +13,10 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
+import java.net.ServerSocket
+import java.security.MessageDigest
+import java.util.Base64
+import kotlin.concurrent.thread
 
 class OkHttpWebSocketClientTest {
     private val server = MockWebServer()
@@ -69,6 +73,48 @@ class OkHttpWebSocketClientTest {
     }
 
     @Test
+    fun 相手がcodeなしで閉じてもClosedで終わる() = runBlocking {
+        // OkHttp のサーバー側では code なし（1005）の close を送れないので、生のソケットで WebSocket サーバー役をする
+        ServerSocket(0).use { serverSocket ->
+            val serverThread = thread { closeWithoutCode(serverSocket) }
+            val url = "ws://127.0.0.1:${serverSocket.localPort}/ws"
+
+            val events = withTimeout(5_000) {
+                val received = mutableListOf<WebSocketEvent>()
+                client.connect(url).collect { received += it }
+                received
+            }
+            serverThread.join(5_000)
+
+            assertTrue(events.first() is WebSocketEvent.Opened)
+            assertEquals(NO_STATUS_CODE, (events.last() as WebSocketEvent.Closed).code)
+        }
+    }
+
+    /** 1 本だけ受け付けて、ハンドシェイクのあと payload なしの close フレームを送る。 */
+    private fun closeWithoutCode(serverSocket: ServerSocket) {
+        serverSocket.accept().use { socket ->
+            val reader = socket.getInputStream().bufferedReader()
+            val key = generateSequence { reader.readLine() }
+                .takeWhile { it.isNotEmpty() }
+                .first { it.startsWith("Sec-WebSocket-Key:", ignoreCase = true) }
+                .substringAfter(":").trim()
+            val accept = Base64.getEncoder().encodeToString(
+                MessageDigest.getInstance("SHA-1").digest("${key}258EAFA5-E914-47DA-95CA-C5AB0DC85B11".toByteArray()),
+            )
+            val output = socket.getOutputStream()
+            output.write(
+                ("HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\n" +
+                    "Sec-WebSocket-Accept: $accept\r\n\r\n").toByteArray(),
+            )
+            output.write(byteArrayOf(0x88.toByte(), 0x00)) // FIN + close、payload の長さ 0
+            output.flush()
+            // クライアントが閉じ返してくるのを読み切ってから切る
+            runCatching { while (socket.getInputStream().read() != -1) Unit }
+        }
+    }
+
+    @Test
     fun つながらなければFailureを流して終わる() = runBlocking {
         val url = server.url("/ws").toString().replaceFirst("http://", "ws://")
         server.close()
@@ -97,5 +143,10 @@ class OkHttpWebSocketClientTest {
 
         val failure = events.single() as WebSocketEvent.Failure
         assertEquals(401, failure.httpStatus)
+    }
+
+    private companion object {
+        /** close フレームに code が無かったときの値。 */
+        const val NO_STATUS_CODE = 1005
     }
 }

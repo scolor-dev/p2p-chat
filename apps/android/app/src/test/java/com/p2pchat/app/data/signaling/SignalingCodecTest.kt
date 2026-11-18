@@ -92,4 +92,10 @@ class SignalingCodecTest {
         val json = parse(SignalingCodec.encode(OutgoingSignal.Candidate("peer", CandidatePayload("c", null, 0))))
         assertFalse("sdpMid" in json.getValue("payload").jsonObject)
     }
+
+    @Test
+    fun sdpMLineIndexが0でも省かずに送る() {
+        val json = parse(SignalingCodec.encode(OutgoingSignal.Candidate("peer", CandidatePayload("c", "0", 0))))
+        assertEquals("0", json.getValue("payload").jsonObject["sdpMLineIndex"].toString())
+    }
 }

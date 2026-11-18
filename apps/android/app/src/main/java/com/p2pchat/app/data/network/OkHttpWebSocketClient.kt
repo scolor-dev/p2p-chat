@@ -32,8 +32,9 @@ class OkHttpWebSocketClient(
             }
 
             override fun onClosing(webSocket: WebSocket, code: Int, reason: String) {
-                // 相手から切断されたら、こちらも閉じ返す
-                webSocket.close(code, null)
+                // 相手から切断されたら、こちらも閉じ返す。
+                // 受け取った code をそのまま返すと、1005（code なし）などの送ってはいけない値で例外になるので、1000 で返す
+                webSocket.close(NORMAL_CLOSURE, null)
             }
 
             override fun onClosed(webSocket: WebSocket, code: Int, reason: String) {

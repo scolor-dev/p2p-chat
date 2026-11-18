@@ -34,6 +34,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.p2pchat.app.R
+import com.p2pchat.app.data.signaling.DisconnectReason
 import com.p2pchat.app.data.signaling.SignalingState
 import com.p2pchat.app.ui.theme.P2PChatTheme
 
@@ -187,12 +188,21 @@ private fun SignalingStatus(state: SignalingState) {
             R.string.signaling_waiting,
             // 1 秒未満でも 0 秒と出さないように切り上げる
             ((state.delayMillis + 999) / 1000).toInt(),
-            state.reason ?: stringResource(R.string.signaling_unknown_reason),
+            disconnectReasonText(state.reason),
         ) to MaterialTheme.colorScheme.error
         SignalingState.Unauthorized ->
             stringResource(R.string.signaling_unauthorized) to MaterialTheme.colorScheme.error
     }
     Text(text = text, color = color)
+}
+
+@Composable
+private fun disconnectReasonText(reason: DisconnectReason?): String = when (reason) {
+    null -> stringResource(R.string.signaling_unknown_reason)
+    is DisconnectReason.Closed -> stringResource(R.string.signaling_reason_closed, reason.code)
+    DisconnectReason.ReadyTimeout -> stringResource(R.string.signaling_reason_ready_timeout)
+    // 例外のメッセージはそのまま出す（訳せないので）
+    is DisconnectReason.Failed -> reason.detail
 }
 
 @Preview(showBackground = true)

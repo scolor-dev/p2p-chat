@@ -16,13 +16,29 @@ sealed interface SignalingState {
 
     /**
      * 切断・失敗のあと、再接続まで待っている。
-     * [failures] は続けて失敗した回数、[delayMillis] は待ち時間、[reason] は直前の切断・失敗の理由。
+     * [failures] は続けて失敗した回数、[delayMillis] は待ち時間、[reason] は直前の切断・失敗の理由（分からなければ null）。
      */
-    data class WaitingToReconnect(val failures: Int, val delayMillis: Long, val reason: String?) : SignalingState
+    data class WaitingToReconnect(
+        val failures: Int,
+        val delayMillis: Long,
+        val reason: DisconnectReason?,
+    ) : SignalingState
 
     /**
      * 接続が `401` で拒否された（token が無効）。同じ token で何度試しても通らないので、
      * ネットワークの切り替え・設定の変更・アプリの再表示があるまで再試行しない。
      */
     data object Unauthorized : SignalingState
+}
+
+/** 接続が切れた・つながらなかった理由。表示する文言は画面側（strings.xml）で決める。 */
+sealed interface DisconnectReason {
+    /** サーバーから切断された。[code] は WebSocket の終了コード。 */
+    data class Closed(val code: Int) : DisconnectReason
+
+    /** 接続はできたが、`ready` が時間内に届かなかった。 */
+    data object ReadyTimeout : DisconnectReason
+
+    /** 接続できなかった・通信が途切れた。[detail] は例外のメッセージ（無ければ例外の型名）。 */
+    data class Failed(val detail: String) : DisconnectReason
 }

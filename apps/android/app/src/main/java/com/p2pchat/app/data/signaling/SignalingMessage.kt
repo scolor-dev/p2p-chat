@@ -13,12 +13,17 @@ import kotlinx.serialization.json.Json
 @Serializable
 data class SdpPayload(val sdp: String)
 
-/** candidate の payload。 */
+/**
+ * candidate の payload。
+ *
+ * [sdpMLineIndex] は既定値を持たせない。`Json` は既定値と同じ値を送らないので、
+ * 既定値があると `0` のときに項目ごと消え、他のアプリ（iOS など）が読めなくなる。
+ */
 @Serializable
 data class CandidatePayload(
     val candidate: String,
     val sdpMid: String? = null,
-    val sdpMLineIndex: Int = 0,
+    val sdpMLineIndex: Int,
 )
 
 /** サーバーから届くメッセージ。 */

@@ -178,7 +178,7 @@ class DefaultSignalingClientTest {
         first.closeFromServer(1001)
         runCurrent()
 
-        assertEquals(SignalingState.WaitingToReconnect(1, 1_000, "切断されました（1001）"), client.current)
+        assertEquals(SignalingState.WaitingToReconnect(1, 1_000, DisconnectReason.Closed(1001)), client.current)
         assertFalse(client.send(OutgoingSignal.Reject("peer")))
 
         advanceTimeBy(999)
@@ -197,30 +197,72 @@ class DefaultSignalingClientTest {
         assertEquals(SignalingState.Ready(DEVICE_ID), client.current)
     }
 
-    @Test
-    fun 失敗が続くと待ち時間が延びreadyまで行けば最初に戻る() = runTest {
-        val client = startedClient()
-
+    /** 接続の失敗を 2 回続けて、待ち時間が 1 秒 → 2 秒と延びるのを確かめ、3 回目の接続を返す。 */
+    private fun TestScope.failTwice(client: SignalingClient): FakeConnection {
         webSocket.connections[0].fail()
         runCurrent()
-        assertEquals(SignalingState.WaitingToReconnect(1, 1_000, "つながりません"), client.current)
+        assertEquals(SignalingState.WaitingToReconnect(1, 1_000, FAILED), client.current)
 
         advanceTimeBy(1_001)
         runCurrent()
         assertEquals(SignalingState.Connecting(2), client.current)
         webSocket.connections[1].fail()
         runCurrent()
-        assertEquals(SignalingState.WaitingToReconnect(2, 2_000, "つながりません"), client.current)
+        assertEquals(SignalingState.WaitingToReconnect(2, 2_000, FAILED), client.current)
 
         advanceTimeBy(2_001)
         runCurrent()
-        val third = webSocket.connections[2]
+        return webSocket.connections[2]
+    }
+
+    @Test
+    fun 失敗が続くと待ち時間が延びreadyが30秒続けば最初に戻る() = runTest {
+        val client = startedClient()
+        val third = failTwice(client)
         third.open()
         third.ready()
+        runCurrent()
+
+        advanceTimeBy(30_000)
+        runCurrent()
         third.closeFromServer(1001)
         runCurrent()
 
-        assertEquals(SignalingState.WaitingToReconnect(1, 1_000, "切断されました（1001）"), client.current)
+        assertEquals(SignalingState.WaitingToReconnect(1, 1_000, DisconnectReason.Closed(1001)), client.current)
+    }
+
+    @Test
+    fun readyの直後に切られると待ち時間は延び続ける() = runTest {
+        val client = startedClient()
+        val third = failTwice(client)
+        third.open()
+        third.ready()
+        runCurrent()
+
+        advanceTimeBy(29_000)
+        runCurrent()
+        third.closeFromServer(1001)
+        runCurrent()
+
+        assertEquals(SignalingState.WaitingToReconnect(3, 4_000, DisconnectReason.Closed(1001)), client.current)
+    }
+
+    @Test
+    fun readyのあとは時間が経っても切らない() = runTest {
+        val client = startedClient()
+        val connection = webSocket.connections.single()
+        connection.open()
+        connection.ready()
+        runCurrent()
+
+        // ready の待ち時間（10 秒）を大きく過ぎても、つながったまま
+        advanceTimeBy(60_000)
+        runCurrent()
+
+        assertTrue(connection.collecting)
+        assertEquals(1, webSocket.connections.size)
+        assertEquals(SignalingState.Ready(DEVICE_ID), client.current)
+        assertTrue(client.send(OutgoingSignal.Reject("peer")))
     }
 
     @Test
@@ -360,10 +402,13 @@ class DefaultSignalingClientTest {
         runCurrent()
 
         assertFalse(connection.collecting)
-        assertEquals(SignalingState.WaitingToReconnect(1, 1_000, "ready が届きませんでした"), client.current)
+        assertEquals(SignalingState.WaitingToReconnect(1, 1_000, DisconnectReason.ReadyTimeout), client.current)
     }
 
     private companion object {
         const val DEVICE_ID = "a1b2c3d4e5f60718"
+
+        /** [FakeConnection.fail] の理由。 */
+        val FAILED = DisconnectReason.Failed("つながりません")
     }
 }

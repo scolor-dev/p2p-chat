@@ -6,6 +6,7 @@ import com.p2pchat.app.data.network.WebSocketClient
 import com.p2pchat.app.data.network.WebSocketEvent
 import com.p2pchat.app.data.network.WebSocketSession
 import com.p2pchat.app.data.settings.ServerSettingsRepository
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -42,6 +43,11 @@ class DefaultSignalingClient(
     private val backoff: ReconnectBackoff = ReconnectBackoff(),
     /** 接続を始めてから `ready` が届くまでの上限。過ぎたら切ってつなぎ直す。 */
     private val readyTimeoutMillis: Long = 10_000,
+    /**
+     * `ready` のあと、この時間つながり続けたら、待ち時間を最初（1 秒）に戻す。
+     * `ready` の直後に切られ続ける場合に、毎秒つなぎ直さないように。
+     */
+    private val stableMillis: Long = 30_000,
     /**
      * 中の処理はすべてこの 1 本の流れで順に動かす（状態を複数のスレッドから同時に触らないように）。
      * テストでは仮想時間のディスパッチャーを渡す。
@@ -104,8 +110,8 @@ class DefaultSignalingClient(
         while (true) {
             _state.value = SignalingState.Connecting(attempt = failures + 1)
             val outcome = connectOnce(url, identity)
-            // 一度 ready まで行けたなら、サーバーは生きていた。待ち時間は最初からにする
-            if (outcome.reachedReady) failures = 0
+            // ready のあとしばらく続いたなら、サーバーは正常に動いていた。待ち時間は最初からにする
+            if (outcome.wasStable) failures = 0
 
             when (val end = outcome.end) {
                 SessionEnd.NetworkChanged -> failures = 0 // 新しい回線ですぐにつなぎ直す
@@ -129,26 +135,27 @@ class DefaultSignalingClient(
 
     /** 1 回つないで、切れるまで（またはネットワークが切り替わるまで）待つ。 */
     private suspend fun connectOnce(url: String, identity: DeviceIdentity): Outcome = coroutineScope {
-        var reachedReady = false
-        val session = async { runSession(url, identity) { reachedReady = true } }
+        var wasStable = false
+        val session = async { runSession(url, identity) { wasStable = true } }
         val networkChanged = async { networkMonitor.awaitNewNetwork() }
         select {
             session.onAwait { end ->
                 networkChanged.cancel()
-                Outcome(end, reachedReady)
+                Outcome(end, wasStable)
             }
             networkChanged.onAwait {
                 // 古い回線の接続は、ping が途切れるまで切れたと分からないので、こちらから切る
                 session.cancel()
-                Outcome(SessionEnd.NetworkChanged, reachedReady)
+                Outcome(SessionEnd.NetworkChanged, wasStable)
             }
         }
     }
 
-    private suspend fun runSession(url: String, identity: DeviceIdentity, onReady: () -> Unit): SessionEnd =
+    /** 1 回分の接続。[onStable] は `ready` のあと [stableMillis] つながり続けたときに呼ぶ。 */
+    private suspend fun runSession(url: String, identity: DeviceIdentity, onStable: () -> Unit): SessionEnd =
         coroutineScope {
             var end: SessionEnd = SessionEnd.Lost(null)
-            var ready = false
+            val ready = CompletableDeferred<Unit>()
             var opened: WebSocketSession? = null
 
             val connection = launch {
@@ -159,43 +166,47 @@ class DefaultSignalingClient(
                         is WebSocketEvent.Message -> when (val signal = SignalingCodec.decode(event.text)) {
                             null -> Unit // 知らない type は無視する
                             is IncomingSignal.Ready -> {
-                                ready = true
+                                ready.complete(Unit)
                                 readySession = opened
-                                onReady()
                                 _state.value = SignalingState.Ready(signal.deviceId)
                             }
                             else -> _incoming.emit(signal)
                         }
-                        is WebSocketEvent.Closed -> end = SessionEnd.Lost("切断されました（${event.code}）")
+                        is WebSocketEvent.Closed -> end = SessionEnd.Lost(DisconnectReason.Closed(event.code))
                         is WebSocketEvent.Failure -> end =
                             if (event.httpStatus == HTTP_UNAUTHORIZED) SessionEnd.Unauthorized
-                            else SessionEnd.Lost(event.error.message ?: event.error.javaClass.simpleName)
+                            else SessionEnd.Lost(
+                                DisconnectReason.Failed(event.error.message ?: event.error.javaClass.simpleName),
+                            )
                     }
                 }
             }
-            val readyTimer = launch {
-                delay(readyTimeoutMillis)
-                if (!ready) {
-                    end = SessionEnd.Lost("ready が届きませんでした")
+            val readyWatcher = launch {
+                if (withTimeoutOrNull(readyTimeoutMillis) { ready.await() } == null) {
+                    end = SessionEnd.Lost(DisconnectReason.ReadyTimeout)
                     connection.cancel() // collect をやめると切断される
+                    return@launch
                 }
+                delay(stableMillis)
+                onStable()
             }
 
             try {
                 connection.join()
                 end
             } finally {
-                readyTimer.cancel()
+                readyWatcher.cancel()
                 readySession = null
             }
         }
 
-    private data class Outcome(val end: SessionEnd, val reachedReady: Boolean)
+    /** [wasStable] は `ready` のあと [stableMillis] 以上つながっていたか。 */
+    private data class Outcome(val end: SessionEnd, val wasStable: Boolean)
 
     /** 1 回の接続が終わった理由。 */
     private sealed interface SessionEnd {
         /** 切断・失敗・タイムアウト。待ってから再接続する。 */
-        data class Lost(val reason: String?) : SessionEnd
+        data class Lost(val reason: DisconnectReason?) : SessionEnd
 
         /** `401`。token が無効なので、きっかけがあるまで再試行しない。 */
         data object Unauthorized : SessionEnd
