@@ -1,0 +1,3 @@
+# すべてのファイルの変更に、リポジトリオーナーのレビューを必須にする。
+# develop / main のルール（Rulesets）で「Code Owner の承認が必須」を有効にしている。
+* @scolor-dev

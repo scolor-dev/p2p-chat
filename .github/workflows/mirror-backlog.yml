@@ -1,0 +1,50 @@
+# GitHub の main / develop を Backlog の Git リポジトリへ一方向にコピーする。
+# 正は GitHub。Backlog で直接コミットすると、内容が食い違って push が失敗する（強制上書きはしない）。
+#
+# 必要な設定:
+#   Secrets  BACKLOG_SSH_KEY  Backlog に公開鍵を登録した ed25519 の秘密鍵
+name: Backlog へのミラー
+
+on:
+  push:
+    branches: [main, develop]
+  workflow_dispatch:
+
+concurrency:
+  group: mirror-backlog
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  BACKLOG_REPO: fit-pbl@fit-pbl.git.backlog.jp:/2026TEAM2/p2pchat.git
+
+jobs:
+  mirror:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # 履歴をすべて送るため
+
+      - name: SSH の設定
+        env:
+          BACKLOG_SSH_KEY: ${{ secrets.BACKLOG_SSH_KEY }}
+        run: |
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$BACKLOG_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          # Backlog 公式のフィンガープリント SHA256:S+rudHUgqeXOctYndOfk00EPe3oBTrFrklXb0wUvO3U と照合済み
+          echo 'fit-pbl.git.backlog.jp ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIGpQ1qklwWQC2q/1U1FBx7/ed0VTsCKE4D8SXnnS1oXF' >> ~/.ssh/known_hosts
+
+      - name: Backlog に push
+        run: |
+          # どちらのブランチが更新されても、main と develop の両方を最新にする
+          refs=()
+          for b in main develop; do
+            if git show-ref --verify --quiet "refs/remotes/origin/$b"; then
+              refs+=("refs/remotes/origin/$b:refs/heads/$b")
+            fi
+          done
+          git push "$BACKLOG_REPO" "${refs[@]}"
