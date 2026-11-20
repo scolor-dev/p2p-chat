@@ -17,3 +17,9 @@ data object Qr
 
 @Serializable
 data object Settings
+
+@Serializable
+data object Registration
+
+@Serializable
+data object AddContact

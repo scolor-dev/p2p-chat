@@ -1,13 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?><!--
-   Sample backup rules file; uncomment and customize as necessary.
-   See https://developer.android.com/guide/topics/data/autobackup
-   for details.
-   Note: This file is ignored for devices older than API 31
-   See https://developer.android.com/about/versions/12/backup-restore
+   Android 11 以前向けの自動バックアップの設定（このアプリは minSdk 31 なので、実際には
+   data_extraction_rules.xml の方が使われる。同じ内容を揃えて書いてある）。
+
+   端末の身元（deviceId と、暗号化した token）の DataStore ファイルは、バックアップに含めない。
+   理由: token の暗号化に使う AES 鍵は Android Keystore の中にあり、バックアップされない。
+   暗号文だけが別の端末（または初期化後の端末）に復元されると、復号できない壊れた状態になる。
+   復元後は「未登録」として、登録画面からやり直す。
+   ファイル名は DataStoreDeviceIdentityStore.FILE_NAME と合わせること。
 -->
 <full-backup-content>
-    <!--
-   <include domain="sharedpref" path="."/>
-   <exclude domain="sharedpref" path="device.xml"/>
--->
+    <exclude domain="file" path="datastore/device_identity.preferences_pb" />
 </full-backup-content>

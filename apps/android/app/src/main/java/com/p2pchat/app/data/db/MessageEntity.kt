@@ -1,13 +1,14 @@
 package com.p2pchat.app.data.db
 
 import androidx.room.Entity
+import androidx.room.Index
 import androidx.room.PrimaryKey
 import com.p2pchat.app.data.message.Message
 import com.p2pchat.app.data.message.MessageDirection
 import com.p2pchat.app.data.message.MessageStatus
 
 /** DB のメッセージ 1 行（テーブル定義）。 */
-@Entity(tableName = "messages")
+@Entity(tableName = "messages", indices = [Index("deviceId")])
 data class MessageEntity(
     @PrimaryKey val id: String,
     val deviceId: String,

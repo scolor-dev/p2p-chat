@@ -23,6 +23,15 @@ class ContactsViewModelTest {
     private class FakeContactRepository : ContactRepository {
         val contacts = MutableStateFlow<List<Contact>>(emptyList())
         override fun observeContacts(): Flow<List<Contact>> = contacts
+        override suspend fun getContact(deviceId: String): Contact? = contacts.value.find { it.deviceId == deviceId }
+        override suspend fun saveContact(contact: Contact) { contacts.value = contacts.value + contact }
+        override suspend fun updateName(deviceId: String, name: String) {
+            contacts.value = contacts.value.map { if (it.deviceId == deviceId) it.copy(name = name) else it }
+        }
+        override suspend fun updateVerified(deviceId: String, isVerified: Boolean) {
+            contacts.value = contacts.value.map { if (it.deviceId == deviceId) it.copy(isVerified = isVerified) else it }
+        }
+        override suspend fun deleteContact(deviceId: String) { contacts.value = contacts.value.filterNot { it.deviceId == deviceId } }
     }
 
     @Test
@@ -38,12 +47,29 @@ class ContactsViewModelTest {
     fun Repositoryの連絡先が画面の状態に反映される() = runTest {
         val repository = FakeContactRepository()
         val viewModel = ContactsViewModel(repository)
-        val alice = Contact(deviceId = "a1", name = "Alice")
+        val alice = Contact(deviceId = "a1", name = "Alice", publicKey = "", isVerified = false, createdAt = 1000L)
 
         repository.contacts.value = listOf(alice)
         val state = viewModel.uiState.first { it.contacts.isNotEmpty() }
 
-        assertEquals(listOf(alice), state.contacts)
+        assertEquals(1, state.contacts.size)
+        val item = state.contacts.single()
+        assertEquals("a1", item.deviceId)
+        assertEquals("Alice", item.name)
         assertEquals(false, state.isLoading)
+    }
+
+    @Test
+    fun メッセージ機能の実装前は未確認と送信失敗が立たない() = runTest {
+        val repository = FakeContactRepository()
+        val viewModel = ContactsViewModel(repository)
+        repository.contacts.value = listOf(
+            Contact(deviceId = "a1", name = "Alice", publicKey = "", isVerified = false, createdAt = 1000L),
+        )
+
+        val item = viewModel.uiState.first { it.contacts.isNotEmpty() }.contacts.single()
+
+        assertEquals(false, item.isUnread)
+        assertEquals(false, item.sendError)
     }
 }
