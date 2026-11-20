@@ -3,14 +3,17 @@ package com.p2pchat.app.ui.contacts
 import com.p2pchat.app.MainDispatcherRule
 import com.p2pchat.app.data.contact.Contact
 import com.p2pchat.app.data.contact.ContactRepository
+import com.p2pchat.app.data.crypto.PublicKeyFingerprint
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
+import java.util.Base64
 
 /**
  * ViewModel のテストの見本。
@@ -71,5 +74,24 @@ class ContactsViewModelTest {
 
         assertEquals(false, item.isUnread)
         assertEquals(false, item.sendError)
+    }
+
+    @Test
+    fun 確認状態と公開鍵のフィンガープリントが一覧に渡る() = runTest {
+        val repository = FakeContactRepository()
+        val viewModel = ContactsViewModel(repository)
+        val der = "abc".toByteArray()
+        repository.contacts.value = listOf(
+            Contact("a1", "Alice", Base64.getEncoder().encodeToString(der), isVerified = true, createdAt = 1L),
+            Contact("b2", "Bob", publicKey = "", isVerified = false, createdAt = 2L),
+        )
+
+        val items = viewModel.uiState.first { it.contacts.size == 2 }.contacts.associateBy { it.deviceId }
+
+        assertEquals(true, items.getValue("a1").isVerified)
+        // 公開鍵そのものの先頭ではなく、DER の SHA-256（QR の fp と同じ計算）になっている
+        assertEquals(PublicKeyFingerprint.fromDer(der), items.getValue("a1").fingerprint)
+        assertEquals(false, items.getValue("b2").isVerified)
+        assertNull(items.getValue("b2").fingerprint)
     }
 }

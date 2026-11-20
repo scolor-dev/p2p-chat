@@ -4,6 +4,7 @@ import com.p2pchat.app.data.crypto.DeviceKeyStore
 import com.p2pchat.app.data.network.ApiClient
 import com.p2pchat.app.data.network.ApiException
 import com.p2pchat.app.data.network.RegisteredDevice
+import com.p2pchat.app.data.network.RemoteDevice
 import com.p2pchat.app.data.settings.ServerSettings
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -55,6 +56,8 @@ class DefaultDeviceRepositoryTest {
             gate?.await()
             return result
         }
+        override suspend fun getDevice(server: ServerSettings, deviceId: String): Result<RemoteDevice> =
+            error("端末登録では呼ばない")
     }
 
     private class FakeIdentityStore(

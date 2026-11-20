@@ -47,6 +47,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.p2pchat.app.R
+import com.p2pchat.app.data.crypto.PublicKeyFingerprint
 import com.p2pchat.app.ui.theme.P2PChatTheme
 
 /**
@@ -57,6 +58,7 @@ import com.p2pchat.app.ui.theme.P2PChatTheme
 fun ContactsScreen(
     onContactClick: (deviceId: String) -> Unit,
     onQrClick: () -> Unit,
+    onAddClick: () -> Unit,
     onSettingsClick: () -> Unit,
     viewModel: ContactsViewModel = viewModel(factory = ContactsViewModel.Factory),
 ) {
@@ -65,6 +67,7 @@ fun ContactsScreen(
         uiState = uiState,
         onContactClick = onContactClick,
         onQrClick = onQrClick,
+        onAddClick = onAddClick,
         onSettingsClick = onSettingsClick,
     )
 }
@@ -76,6 +79,7 @@ fun ContactsContent(
     uiState: ContactsUiState,
     onContactClick: (deviceId: String) -> Unit,
     onQrClick: () -> Unit,
+    onAddClick: () -> Unit,
     onSettingsClick: () -> Unit,
 ) {
     var selectedContactForDetails by remember { mutableStateOf<ContactListItemUiModel?>(null) }
@@ -99,6 +103,12 @@ fun ContactsContent(
                     }
                 },
                 actions = {
+                    IconButton(onClick = onAddClick) {
+                        Icon(
+                            painter = painterResource(R.drawable.baseline_person_add_24),
+                            contentDescription = stringResource(R.string.add_contact_title),
+                        )
+                    }
                     IconButton(onClick = onSettingsClick) {
                         Icon(
                             painter = painterResource(R.drawable.baseline_settings_24),
@@ -210,7 +220,7 @@ private fun ContactListItem(
                 }
 
                 TextButton(onClick = onInfoClick) {
-                    Text("詳細")
+                    Text(stringResource(R.string.contacts_details_button))
                 }
             }
         },
@@ -289,7 +299,8 @@ private fun ContactDetailDialog(
                     color = MaterialTheme.colorScheme.primary,
                 )
                 Text(
-                    text = formatFingerprint(contact.publicKey),
+                    text = contact.fingerprint?.let(PublicKeyFingerprint::format)
+                        ?: stringResource(R.string.contact_details_fingerprint_none),
                     style = MaterialTheme.typography.bodySmall,
                     fontFamily = FontFamily.Monospace,
                 )
@@ -301,11 +312,6 @@ private fun ContactDetailDialog(
             }
         },
     )
-}
-
-private fun formatFingerprint(publicKey: String): String {
-    if (publicKey.isBlank()) return "（未登録）"
-    return publicKey.chunked(4).take(8).joinToString(":")
 }
 
 @Preview(
@@ -324,7 +330,7 @@ private fun ContactsContentPreview() {
                     ContactListItemUiModel(
                         deviceId = "a1b2c3d4",
                         name = "Alice",
-                        publicKey = "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAE...",
+                        fingerprint = "ungWv48Bz-pBQUDeXa4iI7ADYaOWF3qctBD_YfIAFa0",
                         isVerified = true,
                         latestMessage = "送信に失敗したメッセージです",
                         isUnread = true,
@@ -333,7 +339,7 @@ private fun ContactsContentPreview() {
                     ContactListItemUiModel(
                         deviceId = "0f1e2d3c",
                         name = "Bob",
-                        publicKey = "",
+                        fingerprint = null,
                         isVerified = false,
                         latestMessage = "未確認のメッセージです",
                         isUnread = true,
@@ -342,7 +348,7 @@ private fun ContactsContentPreview() {
                     ContactListItemUiModel(
                         deviceId = "12345678",
                         name = "Carol",
-                        publicKey = "",
+                        fingerprint = null,
                         isVerified = false,
                         latestMessage = "確認済みのメッセージです",
                         isUnread = false,
@@ -353,6 +359,7 @@ private fun ContactsContentPreview() {
             ),
             onContactClick = {},
             onQrClick = {},
+            onAddClick = {},
             onSettingsClick = {},
         )
     }
@@ -375,6 +382,7 @@ private fun ContactsLoadingPreview() {
             ),
             onContactClick = {},
             onQrClick = {},
+            onAddClick = {},
             onSettingsClick = {},
         )
     }
@@ -397,6 +405,7 @@ private fun ContactsEmptyPreview() {
             ),
             onContactClick = {},
             onQrClick = {},
+            onAddClick = {},
             onSettingsClick = {},
         )
     }
