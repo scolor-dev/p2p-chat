@@ -8,6 +8,13 @@
     <string name="settings_title">設定</string>
     <string name="back">戻る</string>
     <string name="placeholder_message">準備中です</string>
+    <string name="contacts_load_error">連絡先を読み込めませんでした</string>
+    <string name="retry">再試行</string>
+    <string name="message_sending">送信中</string>
+    <string name="message_read">確認済み</string>
+    <string name="message_failed_retry">送信失敗・再送</string>
+    <string name="message_send_error">メッセージの送信に失敗しました</string>
+    <string name="message_unread">未確認のメッセージがあります</string>
 
     <string name="settings_server_section">接続先のサーバー</string>
     <string name="settings_host_label">IP アドレス</string>
@@ -42,4 +49,19 @@
     <string name="settings_device_section">この端末</string>
     <string name="settings_device_id_label">端末 ID: %1$s</string>
     <string name="settings_device_not_registered">未登録</string>
+
+    <string name="add_contact_title">連絡先を追加</string>
+    <string name="add_contact_description">相手の端末 ID を入力してください。相手の設定画面に表示されています。</string>
+    <string name="add_contact_id_label">相手の端末 ID</string>
+    <string name="add_contact_search">検索</string>
+    <string name="add_contact_found_label">見つかった端末</string>
+    <string name="add_contact_unverified_note">「未確認」の連絡先として追加されます</string>
+    <string name="add_contact_add">追加する</string>
+    <string name="add_contact_error_empty">端末 ID を入力してください</string>
+    <string name="add_contact_error_server_not_configured">接続先のサーバーが設定されていません。設定画面で入力してください。</string>
+    <string name="add_contact_error_not_found">その ID の端末は見つかりませんでした</string>
+    <string name="add_contact_error_self">自分自身は追加できません</string>
+    <string name="add_contact_error_already_added">すでに連絡先にいます</string>
+    <string name="add_contact_error_network">サーバーに接続できませんでした。接続先の設定とネットワークを確かめてください。</string>
+    <string name="add_contact_error_storage">連絡先を保存できませんでした。もう一度試してください。</string>
 </resources>

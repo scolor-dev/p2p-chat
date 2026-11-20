@@ -52,7 +52,24 @@ class ContactsViewModelTest {
         repository.contacts.value = listOf(alice)
         val state = viewModel.uiState.first { it.contacts.isNotEmpty() }
 
-        assertEquals(listOf(alice), state.contacts)
+        assertEquals(1, state.contacts.size)
+        val item = state.contacts.single()
+        assertEquals("a1", item.deviceId)
+        assertEquals("Alice", item.name)
         assertEquals(false, state.isLoading)
+    }
+
+    @Test
+    fun メッセージ機能の実装前は未確認と送信失敗が立たない() = runTest {
+        val repository = FakeContactRepository()
+        val viewModel = ContactsViewModel(repository)
+        repository.contacts.value = listOf(
+            Contact(deviceId = "a1", name = "Alice", publicKey = "", isVerified = false, createdAt = 1000L),
+        )
+
+        val item = viewModel.uiState.first { it.contacts.isNotEmpty() }.contacts.single()
+
+        assertEquals(false, item.isUnread)
+        assertEquals(false, item.sendError)
     }
 }

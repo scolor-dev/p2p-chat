@@ -13,30 +13,48 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 
 /**
- * 連絡先一覧の ViewModel。MVVM の見本。
- *
- * - 必要な部品（Repository）は、コンストラクターで受け取る
- * - 画面には [uiState] だけを公開する。画面は表示するだけで、判断はここで行う
+ * 連絡先一覧のViewModel。
  */
 class ContactsViewModel(
     repository: ContactRepository,
 ) : ViewModel() {
 
-    val uiState: StateFlow<ContactsUiState> = repository.observeContacts()
-        .map { contacts -> ContactsUiState(contacts = contacts, isLoading = false) }
-        .stateIn(
-            scope = viewModelScope,
-            // 画面が見えている間だけ Repository を購読する（画面の回転では 5 秒間つなぎっぱなしにする）
-            started = SharingStarted.WhileSubscribed(5_000),
-            initialValue = ContactsUiState(),
-        )
+    val uiState: StateFlow<ContactsUiState> =
+        repository.observeContacts()
+            .map { contacts ->
+                ContactsUiState(
+                    contacts = contacts.map { contact ->
+                        ContactListItemUiModel(
+                            deviceId = contact.deviceId,
+                            name = contact.name,
+
+                            // TODO: 実際の最新メッセージへ差し替える
+                            latestMessage = "ここにメッセージ内容が入ります",
+
+                            // TODO: 実際の未確認状態へ差し替える
+                            isUnread = false,
+
+                            // TODO: 実際の送信結果へ差し替える
+                            sendError = false,
+                        )
+                    },
+                    isLoading = false,
+                )
+            }
+            .stateIn(
+                scope = viewModelScope,
+                started = SharingStarted.WhileSubscribed(5_000),
+                initialValue = ContactsUiState(),
+            )
 
     companion object {
-        /** AppContainer から部品を取り出して ViewModel を作る。新しい ViewModel も同じ形で書く。 */
         val Factory = viewModelFactory {
             initializer {
                 val app = this[APPLICATION_KEY] as P2PChatApp
-                ContactsViewModel(app.container.contactRepository)
+
+                ContactsViewModel(
+                    repository = app.container.contactRepository,
+                )
             }
         }
     }

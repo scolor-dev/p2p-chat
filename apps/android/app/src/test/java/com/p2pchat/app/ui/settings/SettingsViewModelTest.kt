@@ -5,6 +5,7 @@ import com.p2pchat.app.data.device.DeviceIdentity
 import com.p2pchat.app.data.device.FakeDeviceRepository
 import com.p2pchat.app.data.network.ApiClient
 import com.p2pchat.app.data.network.RegisteredDevice
+import com.p2pchat.app.data.network.RemoteDevice
 import com.p2pchat.app.data.settings.ServerSettings
 import com.p2pchat.app.data.settings.ServerSettingsRepository
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -40,6 +41,9 @@ class SettingsViewModelTest {
             name: String,
             publicKey: String,
         ): Result<RegisteredDevice> = error("設定画面では呼ばない")
+
+        override suspend fun getDevice(server: ServerSettings, deviceId: String): Result<RemoteDevice> =
+            error("設定画面では呼ばない")
     }
 
     @Test
