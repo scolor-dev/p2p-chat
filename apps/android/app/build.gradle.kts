@@ -56,9 +56,7 @@ dependencies {
     implementation(libs.kotlinx.serialization.json)
     implementation(libs.okhttp)
     implementation(libs.androidx.datastore.preferences)
-
-    implementation(libs.zxing.core)/*追加*/
-
+    implementation(libs.zxing.core)
     ksp(libs.androidx.room.compiler)
     testImplementation(libs.junit)
     testImplementation(libs.kotlinx.coroutines.test)

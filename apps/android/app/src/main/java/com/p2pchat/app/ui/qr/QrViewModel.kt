@@ -1,96 +1,77 @@
 package com.p2pchat.app.ui.qr
 
-import android.graphics.Bitmap
-import android.graphics.Color
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider.AndroidViewModelFactory.Companion.APPLICATION_KEY
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
-import com.google.zxing.BarcodeFormat
-import com.google.zxing.qrcode.QRCodeWriter
 import com.p2pchat.app.P2PChatApp
 import com.p2pchat.app.data.crypto.DeviceKeyStore
 import com.p2pchat.app.data.device.DeviceRepository
+import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import java.security.MessageDigest
-import java.security.PublicKey
-import java.util.Base64
+import kotlinx.coroutines.withContext
+import kotlin.coroutines.cancellation.CancellationException
 
+/** QR 画面が表示に使う状態。画像そのものは持たず、QR に入れる文字列 [contactUrl] を持つ。 */
 data class QrUiState(
     val isLoading: Boolean = true,
     val deviceId: String? = null,
-    val qrBitmap: Bitmap? = null,
-    val errorMessage: String? = null,
+    /** QR に入れる `p2pchat://contact?id=...&fp=...`。作れなかったときは null。 */
+    val contactUrl: String? = null,
+    val error: QrError? = null,
 )
 
+enum class QrError {
+    /** 端末がまだ登録されていない。 */
+    NotRegistered,
+
+    /** 鍵を取り出せないなど。 */
+    Failed,
+}
+
+/**
+ * QR 画面の ViewModel。登録済みの `deviceId` と公開鍵から、QR に入れる URL を作る（#23）。
+ * 鍵の取り出しは Keystore を触るので、[ioDispatcher] で行う。
+ */
 class QrViewModel(
     private val deviceRepository: DeviceRepository,
     private val deviceKeyStore: DeviceKeyStore,
+    private val ioDispatcher: CoroutineDispatcher = Dispatchers.Default,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(QrUiState())
     val uiState: StateFlow<QrUiState> = _uiState.asStateFlow()
 
     init {
-        loadContactInfo()
+        load()
     }
 
-    private fun loadContactInfo() {
+    private fun load() {
         viewModelScope.launch {
             try {
-                // 1. deviceId を取得
-                val identity = deviceRepository.identity.first()
-                val deviceId = identity?.deviceId
-
+                val deviceId = deviceRepository.identity.first()?.deviceId
                 if (deviceId == null) {
-                    _uiState.update { it.copy(isLoading = false, errorMessage = "端末が登録されていません") }
+                    _uiState.update { it.copy(isLoading = false, error = QrError.NotRegistered) }
                     return@launch
                 }
-
-                // 2. 公開鍵から Fingerprint (fp) を計算 (SHA-256 + unpadded base64url)
-                val publicKey = deviceKeyStore.getOrCreatePublicKey()
-                val fp = generateFingerprint(publicKey)
-
-                // 3. 連絡先 URL の組み立て: p2pchat://contact?id=<deviceId>&fp=<fingerprint>
-                val contactUrl = "p2pchat://contact?id=$deviceId&fp=$fp"
-
-                // 4. ZXing で QR コードの Bitmap を生成
-                val bitmap = generateQrBitmap(contactUrl, 512, 512)
-
-                _uiState.update {
-                    it.copy(
-                        isLoading = false,
-                        deviceId = deviceId,
-                        qrBitmap = bitmap,
-                    )
+                val url = withContext(ioDispatcher) {
+                    ContactQrUrl.build(deviceId, deviceKeyStore.getOrCreatePublicKey().encoded)
                 }
+                _uiState.update { it.copy(isLoading = false, deviceId = deviceId, contactUrl = url) }
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
-                _uiState.update { it.copy(isLoading = false, errorMessage = e.message ?: "エラーが発生しました") }
+                // 例外のメッセージは画面に出さない（鍵まわりの情報が混ざらないように）
+                _uiState.update { it.copy(isLoading = false, error = QrError.Failed) }
             }
         }
-    }
-
-    private fun generateFingerprint(publicKey: PublicKey): String {
-        val derBytes = publicKey.encoded
-        val sha256 = MessageDigest.getInstance("SHA-256").digest(derBytes)
-        return Base64.getUrlEncoder().withoutPadding().encodeToString(sha256)
-    }
-
-    private fun generateQrBitmap(content: String, width: Int, height: Int): Bitmap {
-        val bitMatrix = QRCodeWriter().encode(content, BarcodeFormat.QR_CODE, width, height)
-        val bmp = Bitmap.createBitmap(width, height, Bitmap.Config.RGB_565)
-        for (x in 0 until width) {
-            for (y in 0 until height) {
-                bmp.setPixel(x, y, if (bitMatrix[x, y]) Color.BLACK else Color.WHITE)
-            }
-        }
-        return bmp
     }
 
     companion object {
