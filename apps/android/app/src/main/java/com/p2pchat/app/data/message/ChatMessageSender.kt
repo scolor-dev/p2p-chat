@@ -15,10 +15,20 @@ package com.p2pchat.app.data.message
  */
 interface ChatMessageSender {
     suspend fun send(deviceId: String, body: String): Result<Unit>
+
+    /**
+     * 送信失敗（[MessageStatus.FAILED]）のメッセージ [id] を、同じ id のまま手動で再送する。毎回新しく暗号化する（nonce は使い回さない）。
+     * 送れたら SENDING に戻って ack を待つ。対象が無い・[deviceId] の自分の送信でない・FAILED でないときは何もせず成功を返す。
+     * 失敗の扱いは [send] と同じ（成功なら [Result.success]、送れなければ [Result.failure]。メッセージは FAILED のまま）。
+     */
+    suspend fun resend(deviceId: String, id: String): Result<Unit>
 }
 
 /** 送信の実体ができるまでの既定実装。常に「接続されていない」として失敗を返す。 */
 class NotConnectedChatMessageSender : ChatMessageSender {
     override suspend fun send(deviceId: String, body: String): Result<Unit> =
+        Result.failure(IllegalStateException("not connected"))
+
+    override suspend fun resend(deviceId: String, id: String): Result<Unit> =
         Result.failure(IllegalStateException("not connected"))
 }

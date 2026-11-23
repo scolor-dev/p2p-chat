@@ -18,6 +18,8 @@ data class ChatUiState(
     val sendError: ChatSendError = ChatSendError.Generic,
     /** 相手との P2P 接続の状態。トップバー下の帯に出す。 */
     val connection: ChatConnection = ChatConnection.Connecting,
+    /** 復号できないメッセージを受け取って捨てた直後。数秒だけ true（画面は警告を 1 行出す）。 */
+    val decryptWarning: Boolean = false,
 )
 
 /** 相手との接続の状態（表示用）。 */
@@ -59,4 +61,18 @@ data class ChatMessageUiModel(
     val isSent: Boolean,
     /** 吹き出しの「しっぽ」を付けるか。 */
     val showTail: Boolean,
+    /** 自分が送ったもの（[isSent]）の送信状態。受信メッセージでは使わない。 */
+    val sendStatus: ChatSendStatus = ChatSendStatus.Sent,
 )
+
+/** 送ったメッセージの送信状態（表示用）。 */
+enum class ChatSendStatus {
+    /** 送信中（ack 待ち、または再送の準備中）。 */
+    Sending,
+
+    /** 相手の ack が届いた。画面には何も出さない。 */
+    Sent,
+
+    /** 送れなかった、または 10 秒 ack が無かった。タップで再送できる。 */
+    Failed,
+}

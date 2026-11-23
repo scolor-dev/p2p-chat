@@ -28,7 +28,7 @@ class P2PChatMessageSenderTest {
 
     /** 呼び出しの順序を記録する Tracker（中身は既定実装）。 */
     private val tracker = object : OutgoingMessageTracker {
-        private val inner = DefaultOutgoingMessageTracker(repository)
+        private val inner = DefaultOutgoingMessageTracker(repository, kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Job()), Long.MAX_VALUE)
         override suspend fun onSendStarted(message: Message) {
             events += "saved:${message.status}"
             inner.onSendStarted(message)
@@ -49,6 +49,7 @@ class P2PChatMessageSenderTest {
         peerConnector = connector,
         cipher = me.cipher,
         tracker = tracker,
+        messageRepository = repository,
         cryptoDispatcher = dispatcher,
         newId = { id },
         clock = { 1234L },

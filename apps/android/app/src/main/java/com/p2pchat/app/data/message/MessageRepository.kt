@@ -17,4 +17,13 @@ interface MessageRepository {
 
     /** [id] のメッセージの送信状態だけを更新する。無ければ何もしない。 */
     suspend fun updateStatus(id: String, status: MessageStatus)
+
+    /** 相手ごとの最新のメッセージ（送受信どちらも。並びは [observeMessages] と同じ sentAt, id の順で最後のもの）を監視する。 */
+    fun observeLatestMessages(): Flow<List<Message>>
+
+    /**
+     * 送信状態が SENDING のまま、[olderThan] より前（sentAt が未満）の自分の送信メッセージを FAILED にして、件数を返す。
+     * アプリの再起動をまたいだ SENDING（ack を待つ処理はもう無い）の整理に使う。
+     */
+    suspend fun failSendingBefore(olderThan: Long): Int
 }

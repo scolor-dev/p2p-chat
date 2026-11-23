@@ -15,6 +15,13 @@ data class ChatColors(
     val inputContainer: Color,
     /** 入力欄の文字とヒント。 */
     val inputText: Color,
+    /** 自分の吹き出しの下に出す「送信中…」（背景の上に載る淡い文字）。 */
+    val sendStatus: Color,
+    /** 「送信失敗（タップで再送）」。背景の上に載る。 */
+    val sendFailed: Color,
+    /** 復号失敗などの警告の帯と、その上の文字。 */
+    val warning: Color,
+    val onWarning: Color,
 )
 
 val LightChatColors = ChatColors(
@@ -26,6 +33,10 @@ val LightChatColors = ChatColors(
     onSentBubble = Color(0xFFA0B9E3),
     inputContainer = Color.White,
     inputText = MainBlue,
+    sendStatus = Color(0xFF5F6B85),
+    sendFailed = Color(0xFFB3261E),
+    warning = Color(0xFFFFE9B8),
+    onWarning = Color(0xFF3D2E00),
 )
 
 val DarkChatColors = ChatColors(
@@ -37,6 +48,10 @@ val DarkChatColors = ChatColors(
     onSentBubble = Color.White,
     inputContainer = MainDarkGray,
     inputText = Color(0xFFA0B9E3),
+    sendStatus = Color(0xFFA9B1C7),
+    sendFailed = Color(0xFFFF8A80),
+    warning = Color(0xFF4A3B12),
+    onWarning = Color(0xFFFFE9B8),
 )
 
 /** [P2PChatTheme] が明暗に合わせて差し込む。 */

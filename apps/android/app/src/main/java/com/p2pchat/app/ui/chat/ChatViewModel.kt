@@ -11,17 +11,23 @@ import com.p2pchat.app.data.message.ChatMessageSender
 import com.p2pchat.app.data.message.ChatSendException
 import com.p2pchat.app.data.message.MessageDirection
 import com.p2pchat.app.data.message.MessageRepository
+import com.p2pchat.app.data.message.MessageStatus
 import com.p2pchat.app.data.peer.ConnectOncePeerReconnector
 import com.p2pchat.app.data.peer.PeerConnector
 import com.p2pchat.app.data.peer.PeerFailure
 import com.p2pchat.app.data.peer.PeerReconnector
 import com.p2pchat.app.data.peer.PeerState
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.emptyFlow
+import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
@@ -40,6 +46,8 @@ class ChatViewModel(
     messageRepository: MessageRepository,
     private val sender: ChatMessageSender,
     private val peerConnector: PeerConnector,
+    /** 復号できずに捨てた `msg` の送り主（端末 ID）。自分の相手の分だけ警告に使う。 */
+    decryptFailures: Flow<String> = emptyFlow(),
     /** 画面を開いている間、相手との接続を保つ（切れたら自動でつなぎ直す）。 */
     private val reconnector: PeerReconnector = ConnectOncePeerReconnector(peerConnector),
 ) : ViewModel() {
@@ -52,6 +60,12 @@ class ChatViewModel(
     )
 
     private val inputState = MutableStateFlow(InputState())
+
+    /** 再送の処理中（接続の待ちを含む）のメッセージ。DB が SENDING になるまでの間も「送信中」に見せる。 */
+    private val resendingIds = MutableStateFlow<Set<String>>(emptySet())
+
+    private val decryptWarning = MutableStateFlow(false)
+    private var decryptWarningJob: Job? = null
 
     /** 相手の最新の session の状態。session がまだ無い間は null（接続中として扱う）。 */
     private val connection = combine(
@@ -68,6 +82,16 @@ class ChatViewModel(
     init {
         // 画面を開いたら接続し、閉じる（ViewModel が破棄される）まで、切れたらつなぎ直す。
         viewModelScope.launch { reconnector.keepConnected(deviceId) }
+        viewModelScope.launch {
+            decryptFailures.filter { it == deviceId }.collect {
+                decryptWarning.value = true
+                decryptWarningJob?.cancel()
+                decryptWarningJob = launch {
+                    delay(DECRYPT_WARNING_MILLIS)
+                    decryptWarning.value = false
+                }
+            }
+        }
     }
 
     val uiState: StateFlow<ChatUiState> =
@@ -76,7 +100,8 @@ class ChatViewModel(
             messageRepository.observeMessages(deviceId),
             inputState,
             connection,
-        ) { name, messages, input, connection ->
+            combine(resendingIds, decryptWarning) { ids, warning -> ids to warning },
+        ) { name, messages, input, connection, (resending, warning) ->
             val tails = tailFlags(messages.map { it.direction })
             val tooLong = isTooLong(input.text)
             ChatUiState(
@@ -87,6 +112,12 @@ class ChatViewModel(
                         body = message.body,
                         isSent = message.direction == MessageDirection.SENT,
                         showTail = tails[index],
+                        sendStatus = when {
+                            message.id in resending -> ChatSendStatus.Sending
+                            message.status == MessageStatus.SENDING -> ChatSendStatus.Sending
+                            message.status == MessageStatus.FAILED -> ChatSendStatus.Failed
+                            else -> ChatSendStatus.Sent
+                        },
                     )
                 },
                 input = input.text,
@@ -96,6 +127,7 @@ class ChatViewModel(
                 sendFailed = input.sendFailed,
                 sendError = input.sendError,
                 connection = connection,
+                decryptWarning = warning,
             )
         }.stateIn(
             scope = viewModelScope,
@@ -121,6 +153,25 @@ class ChatViewModel(
                 } else {
                     state.copy(isSending = false, sendFailed = true, sendError = result.exceptionOrNull().toSendError())
                 }
+            }
+        }
+    }
+
+    /** 送信失敗のメッセージをタップしたとき。同じ id で再送する（再送中・失敗でないものは無視）。 */
+    fun onResendClick(messageId: String) {
+        if (messageId in resendingIds.value) return
+        val message = uiState.value.messages.firstOrNull { it.id == messageId } ?: return
+        if (!message.isSent || message.sendStatus != ChatSendStatus.Failed) return
+        resendingIds.update { it + messageId }
+        inputState.update { it.copy(sendFailed = false) }
+        viewModelScope.launch {
+            val result = try {
+                sender.resend(deviceId, messageId)
+            } finally {
+                resendingIds.update { it - messageId }
+            }
+            if (result.isFailure) {
+                inputState.update { it.copy(sendFailed = true, sendError = result.exceptionOrNull().toSendError()) }
             }
         }
     }
@@ -161,6 +212,9 @@ class ChatViewModel(
         /** 本文の上限（UTF-8 のバイト数）。設計書「本文の長さ」。 */
         const val MAX_BODY_BYTES = 4096
 
+        /** 復号失敗の警告を出しておく時間。 */
+        const val DECRYPT_WARNING_MILLIS = 5_000L
+
         fun factory(deviceId: String) = viewModelFactory {
             initializer {
                 val app = this[APPLICATION_KEY] as P2PChatApp
@@ -170,6 +224,7 @@ class ChatViewModel(
                     messageRepository = app.container.messageRepository,
                     sender = app.container.chatMessageSender,
                     peerConnector = app.container.peerConnector,
+                    decryptFailures = app.container.incomingMessageHandler.decryptFailures,
                     reconnector = app.container.peerReconnector,
                 )
             }

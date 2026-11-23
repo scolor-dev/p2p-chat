@@ -121,6 +121,10 @@
     <string name="chat_error_signaling_unavailable">サーバーに接続できていないため、送信できません。</string>
     <string name="chat_error_connection_failed">相手と接続できませんでした。</string>
     <string name="chat_error_disconnected">接続が切れました。もう一度送信してください。</string>
+    <string name="chat_send_status_sending">送信中…</string>
+    <string name="chat_send_status_failed">送信失敗（タップで再送）</string>
+    <string name="chat_resend_action">再送する</string>
+    <string name="chat_warning_decrypt_failed">復号できないメッセージを受信したため破棄しました（相手の鍵が変わった可能性があります）</string>
     <string name="chat_connection_connecting">接続中…</string>
     <string name="chat_connection_connected">接続済み</string>
     <string name="chat_connection_reconnecting">再接続中…</string>

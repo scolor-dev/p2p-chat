@@ -1,5 +1,6 @@
 package com.p2pchat.app.data.message
 
+import kotlinx.coroutines.launch
 import com.p2pchat.app.data.crypto.PeerKey
 import com.p2pchat.app.data.peer.FakePeerConnector
 import com.p2pchat.app.data.peer.FakePeerSession
@@ -30,7 +31,7 @@ class IncomingMessageHandlerTest {
             contactRepository = InMemoryContacts(me.contactOf(peer)),
             messageRepository = repository,
             cipher = me.cipher,
-            tracker = DefaultOutgoingMessageTracker(repository),
+            tracker = DefaultOutgoingMessageTracker(repository, backgroundScope, Long.MAX_VALUE),
             scope = backgroundScope as CoroutineScope,
             cryptoDispatcher = UnconfinedTestDispatcher(testScheduler),
             clock = { 99L },
@@ -179,8 +180,8 @@ class IncomingMessageHandlerTest {
         val aConnector = FakePeerConnector().also { it.put(aSession) }
         val bConnector = FakePeerConnector().also { it.put(bSession) }
         val dispatcher = UnconfinedTestDispatcher(testScheduler)
-        val aTracker = DefaultOutgoingMessageTracker(aRepo)
-        val bTracker = DefaultOutgoingMessageTracker(bRepo)
+        val aTracker = DefaultOutgoingMessageTracker(aRepo, backgroundScope)
+        val bTracker = DefaultOutgoingMessageTracker(bRepo, backgroundScope)
 
         IncomingMessageHandler(
             aConnector, InMemoryContacts(me.contactOf(peer)), aRepo, me.cipher, aTracker, backgroundScope, dispatcher,
@@ -191,7 +192,7 @@ class IncomingMessageHandlerTest {
         runCurrent()
 
         val sender = P2PChatMessageSender(
-            InMemoryContacts(me.contactOf(peer)), aConnector, me.cipher, aTracker, dispatcher,
+            InMemoryContacts(me.contactOf(peer)), aConnector, me.cipher, aTracker, aRepo, dispatcher,
             newId = { id },
         )
 
@@ -209,12 +210,43 @@ class IncomingMessageHandlerTest {
 
         // 逆向きも往復できる
         val bSender = P2PChatMessageSender(
-            InMemoryContacts(peer.contactOf(me)), bConnector, peer.cipher, bTracker, dispatcher,
+            InMemoryContacts(peer.contactOf(me)), bConnector, peer.cipher, bTracker, bRepo, dispatcher,
             newId = { "6f1c0e5e-1111-4222-8333-44445555aaaa" },
         )
         assertTrue(bSender.send("me", "B から A へ").isSuccess)
         aSession.receive(bSession.sent.last())
         runCurrent()
         assertEquals("B から A へ", aRepo.getMessage("6f1c0e5e-1111-4222-8333-44445555aaaa")!!.body)
+    }
+
+    @Test
+    fun 復号できないmsgは破棄して警告用に相手を通知しackも保存もしない() = runTest {
+        val handler = startHandler()
+        val failures = mutableListOf<String>()
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { handler.decryptFailures.collect { failures += it } }
+        runCurrent()
+        // 別の鍵で暗号化された（相手の鍵が変わったような）msg
+        val stranger = TestDevice("peer")
+        val encrypted = stranger.cipher.encrypt(PeerKey("me", me.keyPair.public.encoded), id, "x".toByteArray())
+
+        session.receive(ChatFrameCodec.encode(ChatFrame.Msg(id, encrypted.nonceBase64(), encrypted.ctBase64())))
+        runCurrent()
+
+        assertEquals(listOf("peer"), failures)
+        assertTrue(repository.messages.value.isEmpty())
+        assertTrue(session.sent.isEmpty())
+    }
+
+    @Test
+    fun 復号できたmsgでは警告を通知しない() = runTest {
+        val handler = startHandler()
+        val failures = mutableListOf<String>()
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { handler.decryptFailures.collect { failures += it } }
+        runCurrent()
+
+        session.receive(msgFrame("ok"))
+        runCurrent()
+
+        assertTrue(failures.isEmpty())
     }
 }

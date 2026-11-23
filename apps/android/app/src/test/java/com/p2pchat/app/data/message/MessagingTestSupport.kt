@@ -28,6 +28,21 @@ class InMemoryMessageRepository : MessageRepository {
     override suspend fun updateStatus(id: String, status: MessageStatus) {
         messages.value = messages.value.map { if (it.id == id) it.copy(status = status) else it }
     }
+
+    override fun observeLatestMessages(): Flow<List<Message>> = messages.map { list ->
+        list.groupBy { it.deviceId }.values.map { group -> group.maxWith(compareBy({ it.sentAt }, { it.id })) }
+    }
+
+    override suspend fun failSendingBefore(olderThan: Long): Int {
+        var count = 0
+        messages.value = messages.value.map {
+            if (it.status == MessageStatus.SENDING && it.direction == MessageDirection.SENT && it.sentAt < olderThan) {
+                count++
+                it.copy(status = MessageStatus.FAILED)
+            } else it
+        }
+        return count
+    }
 }
 
 class InMemoryContacts(vararg contacts: Contact) : ContactRepository {
