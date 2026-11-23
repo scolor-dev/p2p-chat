@@ -8,6 +8,8 @@ import com.p2pchat.app.data.network.RegisteredDevice
 import com.p2pchat.app.data.network.RemoteDevice
 import com.p2pchat.app.data.settings.ServerSettings
 import com.p2pchat.app.data.settings.ServerSettingsRepository
+import com.p2pchat.app.data.signaling.FakeSignalingClient
+import com.p2pchat.app.data.signaling.SignalingState
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
@@ -52,8 +54,9 @@ class SettingsViewModelTest {
             FakeServerSettingsRepository(),
             FakeApiClient(),
             FakeDeviceRepository(DeviceIdentity("a1b2c3d4e5f60718", "tok")),
+            FakeSignalingClient(),
         )
-        val unregistered = SettingsViewModel(FakeServerSettingsRepository(), FakeApiClient(), FakeDeviceRepository())
+        val unregistered = SettingsViewModel(FakeServerSettingsRepository(), FakeApiClient(), FakeDeviceRepository(), FakeSignalingClient())
 
         assertEquals("a1b2c3d4e5f60718", registered.uiState.value.deviceId)
         assertNull(unregistered.uiState.value.deviceId)
@@ -61,7 +64,7 @@ class SettingsViewModelTest {
 
     @Test
     fun 未保存なら空欄と既定のポートが表示される() = runTest {
-        val viewModel = SettingsViewModel(FakeServerSettingsRepository(), FakeApiClient(), FakeDeviceRepository())
+        val viewModel = SettingsViewModel(FakeServerSettingsRepository(), FakeApiClient(), FakeDeviceRepository(), FakeSignalingClient())
 
         val state = viewModel.uiState.value
 
@@ -74,7 +77,7 @@ class SettingsViewModelTest {
     @Test
     fun 保存済みの値が入力欄に読み込まれる() = runTest {
         val repository = FakeServerSettingsRepository(ServerSettings("192.168.1.10", 9000))
-        val viewModel = SettingsViewModel(repository, FakeApiClient(), FakeDeviceRepository())
+        val viewModel = SettingsViewModel(repository, FakeApiClient(), FakeDeviceRepository(), FakeSignalingClient())
 
         val state = viewModel.uiState.value
 
@@ -86,7 +89,7 @@ class SettingsViewModelTest {
     @Test
     fun 正しい入力を保存するとRepositoryに保存される() = runTest {
         val repository = FakeServerSettingsRepository()
-        val viewModel = SettingsViewModel(repository, FakeApiClient(), FakeDeviceRepository())
+        val viewModel = SettingsViewModel(repository, FakeApiClient(), FakeDeviceRepository(), FakeSignalingClient())
 
         viewModel.onHostChange(" 192.168.1.10 ")
         viewModel.onPortChange("8081")
@@ -99,7 +102,7 @@ class SettingsViewModelTest {
     @Test
     fun スキームやポート付きのホストはエラーになり保存されない() = runTest {
         val repository = FakeServerSettingsRepository()
-        val viewModel = SettingsViewModel(repository, FakeApiClient(), FakeDeviceRepository())
+        val viewModel = SettingsViewModel(repository, FakeApiClient(), FakeDeviceRepository(), FakeSignalingClient())
 
         viewModel.onHostChange("http://192.168.1.10:8080")
         viewModel.save()
@@ -111,7 +114,7 @@ class SettingsViewModelTest {
     @Test
     fun 範囲外のポートはエラーになり保存されない() = runTest {
         val repository = FakeServerSettingsRepository()
-        val viewModel = SettingsViewModel(repository, FakeApiClient(), FakeDeviceRepository())
+        val viewModel = SettingsViewModel(repository, FakeApiClient(), FakeDeviceRepository(), FakeSignalingClient())
 
         viewModel.onHostChange("192.168.1.10")
         viewModel.onPortChange("70000")
@@ -125,7 +128,7 @@ class SettingsViewModelTest {
     fun 接続テストは保存前の入力値で行い成功を表示する() = runTest {
         val repository = FakeServerSettingsRepository()
         val apiClient = FakeApiClient()
-        val viewModel = SettingsViewModel(repository, apiClient, FakeDeviceRepository())
+        val viewModel = SettingsViewModel(repository, apiClient, FakeDeviceRepository(), FakeSignalingClient())
 
         viewModel.onHostChange("10.0.2.2")
         viewModel.testConnection()
@@ -138,7 +141,7 @@ class SettingsViewModelTest {
     @Test
     fun 接続テストに失敗すると理由を表示する() = runTest {
         val apiClient = FakeApiClient(Result.failure(IOException("HTTP 500")))
-        val viewModel = SettingsViewModel(FakeServerSettingsRepository(), apiClient, FakeDeviceRepository())
+        val viewModel = SettingsViewModel(FakeServerSettingsRepository(), apiClient, FakeDeviceRepository(), FakeSignalingClient())
 
         viewModel.onHostChange("192.168.1.10")
         viewModel.testConnection()
@@ -149,7 +152,7 @@ class SettingsViewModelTest {
     @Test
     fun 入力が誤っていれば接続テストを行わない() = runTest {
         val apiClient = FakeApiClient()
-        val viewModel = SettingsViewModel(FakeServerSettingsRepository(), apiClient, FakeDeviceRepository())
+        val viewModel = SettingsViewModel(FakeServerSettingsRepository(), apiClient, FakeDeviceRepository(), FakeSignalingClient())
 
         viewModel.testConnection()
 
@@ -161,7 +164,7 @@ class SettingsViewModelTest {
     @Test
     fun 入力を変えると保存済みと接続テストの結果が消える() = runTest {
         val repository = FakeServerSettingsRepository(ServerSettings("192.168.1.10"))
-        val viewModel = SettingsViewModel(repository, FakeApiClient(), FakeDeviceRepository())
+        val viewModel = SettingsViewModel(repository, FakeApiClient(), FakeDeviceRepository(), FakeSignalingClient())
         viewModel.testConnection()
 
         viewModel.onPortChange("9000")
@@ -169,5 +172,16 @@ class SettingsViewModelTest {
         val state = viewModel.uiState.value
         assertFalse(state.isSaved)
         assertEquals(ConnectionTestState.Idle, state.connectionTest)
+    }
+
+    @Test
+    fun シグナリングの接続状態が表示に反映される() = runTest {
+        val signaling = FakeSignalingClient(SignalingState.Connecting(attempt = 1))
+        val viewModel = SettingsViewModel(FakeServerSettingsRepository(), FakeApiClient(), FakeDeviceRepository(), signaling)
+        assertEquals(SignalingState.Connecting(1), viewModel.uiState.value.signalingState)
+
+        signaling.state.value = SignalingState.Ready("a1b2c3d4e5f60718")
+
+        assertEquals(SignalingState.Ready("a1b2c3d4e5f60718"), viewModel.uiState.value.signalingState)
     }
 }

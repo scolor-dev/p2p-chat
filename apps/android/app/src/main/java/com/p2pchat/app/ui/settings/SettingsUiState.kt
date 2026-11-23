@@ -1,5 +1,7 @@
 package com.p2pchat.app.ui.settings
 
+import com.p2pchat.app.data.signaling.SignalingState
+
 /** 設定画面が表示に使う状態。 */
 data class SettingsUiState(
     /** 保存済みの値を読み込み終わるまで true（入力欄がちらつかないように、読み込み中は表示しない）。 */
@@ -14,6 +16,8 @@ data class SettingsUiState(
     val connectionTest: ConnectionTestState = ConnectionTestState.Idle,
     /** この端末の `deviceId`。未登録なら null。 */
     val deviceId: String? = null,
+    /** シグナリングサーバーとの接続状態。 */
+    val signalingState: SignalingState = SignalingState.Stopped,
 )
 
 /** 接続テスト（`GET /healthz`）の状態。 */

@@ -25,6 +25,12 @@ import com.p2pchat.app.data.network.OkHttpWebSocketClient
 import com.p2pchat.app.data.network.WebSocketClient
 import com.p2pchat.app.data.settings.DataStoreServerSettingsRepository
 import com.p2pchat.app.data.settings.ServerSettingsRepository
+import com.p2pchat.app.data.signaling.ConnectivityNetworkMonitor
+import com.p2pchat.app.data.signaling.DefaultSignalingClient
+import com.p2pchat.app.data.signaling.NetworkMonitor
+import com.p2pchat.app.data.signaling.SignalingClient
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.SupervisorJob
 import okhttp3.OkHttpClient
 import java.util.concurrent.TimeUnit
 
@@ -64,8 +70,29 @@ class AppContainer(context: Context) {
     /** signaling サーバーの HTTP API。 */
     val apiClient: ApiClient by lazy { OkHttpApiClient(okHttpClient) }
 
-    /** WebSocket の部品。#20 で、この上にシグナリングの接続を作る。 */
-    val webSocketClient: WebSocketClient by lazy { OkHttpWebSocketClient(okHttpClient) }
+    /**
+     * WebSocket の部品。[signalingClient] がこの上で動く。
+     * 回線が黙って切れたことに気づけるように、こちらからも ping を送る（サーバーも約 20 秒ごとに送る）。
+     */
+    val webSocketClient: WebSocketClient by lazy {
+        OkHttpWebSocketClient(okHttpClient.newBuilder().pingInterval(15, TimeUnit.SECONDS).build())
+    }
+
+    /** アプリが動いている間ずっと続く処理（シグナリングの接続、ネットワークの見張り）の置き場所。 */
+    private val appScope = CoroutineScope(SupervisorJob())
+
+    private val networkMonitor: NetworkMonitor by lazy { ConnectivityNetworkMonitor(context, appScope) }
+
+    /** シグナリングサーバーとの接続。前面にある間だけ動かす（[com.p2pchat.app.P2PChatApp] が start / stop する）。 */
+    val signalingClient: SignalingClient by lazy {
+        DefaultSignalingClient(
+            webSocketClient = webSocketClient,
+            deviceRepository = deviceRepository,
+            serverSettingsRepository = serverSettingsRepository,
+            networkMonitor = networkMonitor,
+            scope = appScope,
+        )
+    }
 
     /** この端末の鍵ペア（Keystore の P-256）。秘密鍵への参照は [messageCipher] が使う。 */
     val deviceKeyStore: DeviceKeyStore by lazy { AndroidKeystoreDeviceKeyStore() }
