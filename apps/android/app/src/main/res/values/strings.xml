@@ -89,4 +89,9 @@
     <string name="qr_device_id_label">この端末の ID</string>
     <string name="qr_error_not_registered">端末が登録されていません。先に端末を登録してください。</string>
     <string name="qr_error_failed">QR コードを作れませんでした。もう一度開いてください。</string>
+
+    <string name="chat_input_hint">メッセージを入力してください</string>
+    <string name="chat_send">送信</string>
+    <string name="chat_error_too_long">本文が長すぎます（4096 バイトまで）</string>
+    <string name="chat_error_send_failed">送信できませんでした。接続を確かめてください。</string>
 </resources>
