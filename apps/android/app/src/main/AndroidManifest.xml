@@ -6,6 +6,10 @@
     <!-- ネットワークの切り替えを検知して、シグナリングを再接続するため -->
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
 
+    <!-- 相手の QR を読み取るため。カメラの無い端末にも入れられるようにする -->
+    <uses-permission android:name="android.permission.CAMERA" />
+    <uses-feature android:name="android.hardware.camera" android:required="false" />
+
     <application
         android:name=".P2PChatApp"
         android:allowBackup="true"

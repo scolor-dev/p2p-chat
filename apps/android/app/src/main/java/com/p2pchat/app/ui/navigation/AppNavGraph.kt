@@ -11,6 +11,7 @@ import androidx.navigation.toRoute
 import com.p2pchat.app.ui.addcontact.AddContactScreen
 import com.p2pchat.app.ui.chat.ChatScreen
 import com.p2pchat.app.ui.contacts.ContactsScreen
+import com.p2pchat.app.ui.qr.QrScanScreen
 import com.p2pchat.app.ui.qr.QrScreen
 import com.p2pchat.app.ui.registration.RegistrationScreen
 import com.p2pchat.app.ui.settings.SettingsScreen
@@ -58,7 +59,13 @@ fun AppNavGraph(startViewModel: StartViewModel = viewModel(factory = StartViewMo
                 onAdded = { navController.popBackStack() },
             )
         }
-        composable<Qr> { QrScreen(onBack = { navController.popBackStack() }) }
+        composable<Qr> {
+            QrScreen(
+                onBack = { navController.popBackStack() },
+                onScanClick = { navController.navigate(QrScan) },
+            )
+        }
+        composable<QrScan> { QrScanScreen(onBack = { navController.popBackStack() }) }
         composable<Settings> { SettingsScreen(onBack = { navController.popBackStack() }) }
     }
 }
