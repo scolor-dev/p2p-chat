@@ -16,6 +16,9 @@ data class Chat(val deviceId: String)
 data object Qr
 
 @Serializable
+data object QrScan
+
+@Serializable
 data object Settings
 
 @Serializable
