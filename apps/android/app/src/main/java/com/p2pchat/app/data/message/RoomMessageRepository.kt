@@ -27,6 +27,9 @@ class RoomMessageRepository(
     override fun observeLatestMessages(): Flow<List<Message>> =
         messageDao.observeLatestMessages().map { entities -> entities.map { it.toDomain() } }
 
+    override fun observeLatestReceivedMessages(): Flow<List<Message>> =
+        messageDao.observeLatestReceivedMessages().map { entities -> entities.map { it.toDomain() } }
+
     override suspend fun failSendingBefore(olderThan: Long): Int =
         messageDao.failSendingBefore(olderThan)
 }

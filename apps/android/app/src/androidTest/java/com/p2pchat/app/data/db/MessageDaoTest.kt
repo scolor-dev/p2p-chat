@@ -59,4 +59,16 @@ class MessageDaoTest {
 
         assertEquals("SENT", dao.observeMessages("peer1").first().single().status)
     }
+
+    @Test
+    fun 相手ごとの最新の受信メッセージだけが返り送信は含まれない() = runBlocking {
+        dao.upsert(entity("r1", sentAt = 1000L).copy(direction = "RECEIVED"))
+        dao.upsert(entity("r2", sentAt = 2000L).copy(direction = "RECEIVED"))
+        dao.upsert(entity("s3", sentAt = 3000L)) // 自分の送信（新しい）
+        dao.upsert(entity("only-sent", deviceId = "peer2", sentAt = 4000L))
+
+        val result = dao.observeLatestReceivedMessages().first()
+
+        assertEquals(listOf("r2"), result.map { it.id })
+    }
 }

@@ -57,6 +57,8 @@ class ChatViewModelTest {
             messages.value = messages.value.map { if (it.id == id) it.copy(status = status) else it }
         }
         override fun observeLatestMessages(): Flow<List<Message>> = messages
+        override fun observeLatestReceivedMessages(): Flow<List<Message>> =
+            messages.map { list -> list.filter { it.direction == MessageDirection.RECEIVED } }
         override suspend fun failSendingBefore(olderThan: Long): Int = 0
     }
 
@@ -85,7 +87,10 @@ class ChatViewModelTest {
     private val sender = FakeSender()
     private val connector = FakePeerConnector()
     private val decryptFailures = kotlinx.coroutines.flow.MutableSharedFlow<String>(extraBufferCapacity = 8)
-    private val viewModel by lazy { ChatViewModel("a1", contacts, messages, sender, connector, decryptFailures) }
+    private val reads = com.p2pchat.app.data.message.InMemoryReadStateRepository()
+    private val viewModel by lazy {
+        ChatViewModel("a1", contacts, messages, sender, connector, decryptFailures, readStateRepository = reads)
+    }
 
     private fun alice() = Contact("a1", "Alice", "", false, 1L)
 
@@ -382,5 +387,38 @@ class ChatViewModelTest {
         advanceTimeBy(1)
         runCurrent()
         assertFalse(viewModel.uiState.value.decryptWarning)
+    }
+
+    @Test
+    fun 画面が見えている間は開いた時点のメッセージと新着が既読になる() = runTest {
+        messages.messages.value = listOf(msg("1", MessageDirection.RECEIVED, 10))
+        viewModel.onVisibleChanged(true)
+        assertEquals(10L, reads.positions.value["a1"])
+
+        messages.messages.value = messages.messages.value + msg("2", MessageDirection.RECEIVED, 20)
+        assertEquals(20L, reads.positions.value["a1"])
+    }
+
+    @Test
+    fun 画面が見えていない間に届いたメッセージは未読のまま() = runTest {
+        messages.messages.value = listOf(msg("1", MessageDirection.RECEIVED, 10))
+        viewModel.onVisibleChanged(true)
+        viewModel.onVisibleChanged(false)
+
+        messages.messages.value = messages.messages.value + msg("2", MessageDirection.RECEIVED, 20)
+
+        assertEquals(10L, reads.positions.value["a1"])
+    }
+
+    @Test
+    fun 見えるまでは既読にならず他の相手のメッセージも既読にしない() = runTest {
+        messages.messages.value = listOf(msg("1", MessageDirection.RECEIVED, 10), msg("9", MessageDirection.RECEIVED, 99, deviceId = "b2"))
+        viewModel.uiState.value // ViewModel を作る
+        assertNull(reads.positions.value["a1"])
+
+        viewModel.onVisibleChanged(true)
+
+        assertEquals(10L, reads.positions.value["a1"])
+        assertNull(reads.positions.value["b2"])
     }
 }
