@@ -134,7 +134,7 @@ class P2PChatMessageSenderTest {
     }
 
     @Test
-    fun 接続の失敗はPeerFailureごとに区別でき保存しない() = runTest {
+    fun 接続の失敗はPeerFailureごとに区別でき_メッセージはFAILEDで残る() = runTest {
         val sender = TestScopeSender(dispatcher = UnconfinedTestDispatcher(testScheduler))
         for (failure in PeerFailure.entries) {
             connector.put(FakePeerSession("peer", PeerState.Failed(failure)))
@@ -144,8 +144,50 @@ class P2PChatMessageSenderTest {
 
             assertEquals(ChatSendException.Reason.PEER, e.reason)
             assertEquals(failure, e.peerFailure)
+            assertEquals(MessageStatus.FAILED, repository.getMessage(id)!!.status)
+            assertEquals(listOf("saved:SENDING", "failed"), events)
+            events.clear()
         }
-        assertTrue(repository.messages.value.isEmpty())
+        assertEquals(1, repository.messages.value.size)
+    }
+
+    @Test
+    fun 接続を待つ間はSENDINGで保存され_Openになれば送って成功する() = runTest {
+        connector.initialState = PeerState.Connecting
+        val sender = TestScopeSender(dispatcher = UnconfinedTestDispatcher(testScheduler))
+        backgroundScope.launch { sender.send("peer", "hi") }
+        runCurrent()
+
+        assertEquals(MessageStatus.SENDING, repository.getMessage(id)!!.status)
+        assertEquals(listOf("saved:SENDING"), events)
+    }
+
+    @Test
+    fun 待っている間に切れたらFAILEDで残る() = runTest {
+        connector.initialState = PeerState.Connecting
+        val sender = TestScopeSender(dispatcher = UnconfinedTestDispatcher(testScheduler))
+        backgroundScope.launch { sender.send("peer", "hi") }
+        runCurrent()
+        (connector.sessions.value.getValue("peer") as FakePeerSession).state.value = PeerState.Disconnected
+        runCurrent()
+
+        assertEquals(MessageStatus.FAILED, repository.getMessage(id)!!.status)
+    }
+
+    @Test
+    fun 接続に失敗した送信は_つながった後の手動再送で同じidのまま送れる() = runTest {
+        val sender = TestScopeSender(dispatcher = UnconfinedTestDispatcher(testScheduler))
+        connector.initialState = PeerState.Failed(PeerFailure.PeerOffline)
+        assertTrue(sender.send("peer", "hi").isFailure)
+        assertEquals(MessageStatus.FAILED, repository.getMessage(id)!!.status)
+
+        connector.initialState = PeerState.Open
+        assertTrue(sender.resend("peer", id).isSuccess)
+        val session = connector.sessions.value.getValue("peer") as FakePeerSession
+
+        assertEquals(1, repository.messages.value.size)
+        assertEquals(MessageStatus.SENDING, repository.getMessage(id)!!.status)
+        assertEquals(id, (ChatFrameCodec.decode(session.sent.single()) as ChatFrame.Msg).id)
     }
 
     @Test
@@ -158,7 +200,6 @@ class P2PChatMessageSenderTest {
 
         assertEquals(listOf("peer"), connector.connectCalls)
         assertEquals(null, result)
-        assertTrue(repository.messages.value.isEmpty())
 
         val session = connector.sessions.value.getValue("peer") as FakePeerSession
         session.state.value = PeerState.Open

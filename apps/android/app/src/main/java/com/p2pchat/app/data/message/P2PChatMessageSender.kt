@@ -83,8 +83,16 @@ class P2PChatMessageSender(
         if (exceedsBodyLimit(text)) throw ChatSendException(ChatSendException.Reason.TOO_LONG)
 
         val peerKey = peerKeyOf(deviceId)
-        val session = openSession(deviceId)
-        transmit(session, peerKey, Message(newId(), deviceId, MessageDirection.SENT, text, MessageStatus.SENDING, clock()))
+        // 接続を待つ前に SENDING で保存する。つながらなければ FAILED のまま履歴に残り、タップで再送できる（#58）。
+        val message = Message(newId(), deviceId, MessageDirection.SENT, text, MessageStatus.SENDING, clock())
+        tracker.onSendStarted(message)
+        val session = try {
+            openSession(deviceId)
+        } catch (e: Throwable) {
+            withContext(NonCancellable) { tracker.onSendFailed(message.id) }
+            throw e
+        }
+        transmit(session, peerKey, message, alreadySaved = true)
     }
 
     private suspend fun resendOrThrow(deviceId: String, id: String) {
@@ -113,9 +121,9 @@ class P2PChatMessageSender(
      * [message]（status = SENDING）を保存し、暗号化して `msg` を送る。送信と手動再送で共通。
      * 暗号化は毎回ここで行うので、再送のたびに nonce が新しくなる。送れなければ FAILED にして例外を投げる。
      */
-    private suspend fun transmit(session: PeerSession, peerKey: PeerKey, message: Message) {
-        // 先に保存して、画面に出す。以降に失敗したら FAILED にする。
-        tracker.onSendStarted(message)
+    private suspend fun transmit(session: PeerSession, peerKey: PeerKey, message: Message, alreadySaved: Boolean = false) {
+        // 先に保存して、画面に出す（送信では接続待ちの前に保存済み）。以降に失敗したら FAILED にする。
+        if (!alreadySaved) tracker.onSendStarted(message)
         try {
             val encrypted = try {
                 withContext(cryptoDispatcher) {
