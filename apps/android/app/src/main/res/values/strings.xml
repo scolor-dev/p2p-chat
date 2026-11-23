@@ -64,4 +64,10 @@
     <string name="add_contact_error_already_added">すでに連絡先にいます</string>
     <string name="add_contact_error_network">サーバーに接続できませんでした。接続先の設定とネットワークを確かめてください。</string>
     <string name="add_contact_error_storage">連絡先を保存できませんでした。もう一度試してください。</string>
+
+    <string name="qr_description">相手にこの QR を読み取ってもらうと、あなたを連絡先に追加できます。</string>
+    <string name="qr_image_description">あなたの連絡先の QR コード</string>
+    <string name="qr_device_id_label">この端末の ID</string>
+    <string name="qr_error_not_registered">端末が登録されていません。先に端末を登録してください。</string>
+    <string name="qr_error_failed">QR コードを作れませんでした。もう一度開いてください。</string>
 </resources>
