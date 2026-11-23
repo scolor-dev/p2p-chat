@@ -11,6 +11,9 @@ data class ContactsUiState(
 data class ContactListItemUiModel(
     val deviceId: String,
     val name: String,
+    /** 公開鍵のフィンガープリント（QR の `fp` と同じ計算）。公開鍵が未登録・不正なら null。 */
+    val fingerprint: String?,
+    val isVerified: Boolean,
     val latestMessage: String,
     val isUnread: Boolean,
     val sendError: Boolean,

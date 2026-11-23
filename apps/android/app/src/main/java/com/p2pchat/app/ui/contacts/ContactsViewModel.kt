@@ -7,6 +7,7 @@ import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import com.p2pchat.app.P2PChatApp
 import com.p2pchat.app.data.contact.ContactRepository
+import com.p2pchat.app.data.crypto.PublicKeyFingerprint
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.map
@@ -27,6 +28,8 @@ class ContactsViewModel(
                         ContactListItemUiModel(
                             deviceId = contact.deviceId,
                             name = contact.name,
+                            fingerprint = PublicKeyFingerprint.fromBase64(contact.publicKey),
+                            isVerified = contact.isVerified,
 
                             // TODO: 実際の最新メッセージへ差し替える
                             latestMessage = "ここにメッセージ内容が入ります",
