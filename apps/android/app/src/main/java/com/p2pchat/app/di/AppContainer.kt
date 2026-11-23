@@ -25,6 +25,9 @@ import com.p2pchat.app.data.network.ApiClient
 import com.p2pchat.app.data.network.OkHttpApiClient
 import com.p2pchat.app.data.network.OkHttpWebSocketClient
 import com.p2pchat.app.data.network.WebSocketClient
+import com.p2pchat.app.data.peer.DefaultPeerConnector
+import com.p2pchat.app.data.peer.PeerConnector
+import com.p2pchat.app.data.peer.WebRtcPeerConnectionFactory
 import com.p2pchat.app.data.settings.DataStoreServerSettingsRepository
 import com.p2pchat.app.data.settings.ServerSettingsRepository
 import com.p2pchat.app.data.signaling.ConnectivityNetworkMonitor
@@ -95,6 +98,16 @@ class AppContainer(context: Context) {
             deviceRepository = deviceRepository,
             serverSettingsRepository = serverSettingsRepository,
             networkMonitor = networkMonitor,
+            scope = appScope,
+        )
+    }
+
+    /** 相手との P2P 接続（WebRTC の DataChannel）。#26 / #27 / #29 が使う。[P2PChatApp] が起動時に start() する。 */
+    val peerConnector: PeerConnector by lazy {
+        DefaultPeerConnector(
+            signaling = signalingClient,
+            contactRepository = contactRepository,
+            factory = WebRtcPeerConnectionFactory(context),
             scope = appScope,
         )
     }
