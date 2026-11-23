@@ -11,4 +11,10 @@ interface MessageRepository {
 
     /** メッセージを追加または更新する。 */
     suspend fun upsertMessage(message: Message)
+
+    /** [id] のメッセージを返す。無ければ null。 */
+    suspend fun getMessage(id: String): Message?
+
+    /** [id] のメッセージの送信状態だけを更新する。無ければ何もしない。 */
+    suspend fun updateStatus(id: String, status: MessageStatus)
 }

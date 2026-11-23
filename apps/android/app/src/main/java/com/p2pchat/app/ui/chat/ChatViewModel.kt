@@ -8,39 +8,66 @@ import androidx.lifecycle.viewmodel.viewModelFactory
 import com.p2pchat.app.P2PChatApp
 import com.p2pchat.app.data.contact.ContactRepository
 import com.p2pchat.app.data.message.ChatMessageSender
+import com.p2pchat.app.data.message.ChatSendException
 import com.p2pchat.app.data.message.MessageDirection
 import com.p2pchat.app.data.message.MessageRepository
+import com.p2pchat.app.data.peer.PeerConnector
+import com.p2pchat.app.data.peer.PeerFailure
+import com.p2pchat.app.data.peer.PeerState
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
-/** チャット画面の ViewModel。連絡先名とメッセージ履歴を購読し、入力と送信の可否を扱う。 */
+/**
+ * チャット画面の ViewModel。連絡先名とメッセージ履歴を購読し、入力と送信の可否を扱う。
+ * 開いたときに相手へ接続し（open 済みならそのまま使う）、接続状態を [ChatUiState.connection] に出す。
+ */
+@OptIn(ExperimentalCoroutinesApi::class)
 class ChatViewModel(
     private val deviceId: String,
     contactRepository: ContactRepository,
     messageRepository: MessageRepository,
     private val sender: ChatMessageSender,
+    private val peerConnector: PeerConnector,
 ) : ViewModel() {
 
     private data class InputState(
         val text: String = "",
         val isSending: Boolean = false,
         val sendFailed: Boolean = false,
+        val sendError: ChatSendError = ChatSendError.Generic,
     )
 
     private val inputState = MutableStateFlow(InputState())
+
+    /** 相手の最新の session の状態。session がまだ無い間は null（接続中として扱う）。 */
+    private val connection = peerConnector.sessions
+        .map { it[deviceId] }
+        .distinctUntilChanged()
+        .flatMapLatest { session -> session?.state ?: flowOf(null) }
+        .map { it.toConnection() }
+
+    init {
+        // 画面を開いたら接続する。接続中・open の session があればそれが返る。
+        viewModelScope.launch { peerConnector.connect(deviceId) }
+    }
 
     val uiState: StateFlow<ChatUiState> =
         combine(
             contactRepository.observeContacts().map { contacts -> contacts.firstOrNull { it.deviceId == deviceId }?.name },
             messageRepository.observeMessages(deviceId),
             inputState,
-        ) { name, messages, input ->
+            connection,
+        ) { name, messages, input, connection ->
             val tails = tailFlags(messages.map { it.direction })
             val tooLong = isTooLong(input.text)
             ChatUiState(
@@ -58,6 +85,8 @@ class ChatViewModel(
                 canSend = input.text.isNotBlank() && !tooLong && !input.isSending,
                 isSending = input.isSending,
                 sendFailed = input.sendFailed,
+                sendError = input.sendError,
+                connection = connection,
             )
         }.stateIn(
             scope = viewModelScope,
@@ -73,7 +102,7 @@ class ChatViewModel(
         val current = inputState.value
         val body = current.text
         if (current.isSending || body.isBlank() || isTooLong(body)) return
-        inputState.update { it.copy(isSending = true, sendFailed = false) }
+        inputState.update { it.copy(isSending = true, sendFailed = false, sendError = ChatSendError.Generic) }
         viewModelScope.launch {
             val result = sender.send(deviceId, body)
             inputState.update { state ->
@@ -81,9 +110,39 @@ class ChatViewModel(
                     // 送っている間に打ち足していたら、その文字は消さない。
                     state.copy(text = if (state.text == body) "" else state.text, isSending = false)
                 } else {
-                    state.copy(isSending = false, sendFailed = true)
+                    state.copy(isSending = false, sendFailed = true, sendError = result.exceptionOrNull().toSendError())
                 }
             }
+        }
+    }
+
+    private fun PeerState?.toConnection(): ChatConnection = when (this) {
+        null, PeerState.Connecting -> ChatConnection.Connecting
+        PeerState.Open -> ChatConnection.Connected
+        PeerState.Disconnected -> ChatConnection.Disconnected
+        is PeerState.Failed -> when (reason) {
+            PeerFailure.PeerOffline -> ChatConnection.PeerOffline
+            PeerFailure.Rejected -> ChatConnection.Rejected
+            PeerFailure.Timeout -> ChatConnection.NoResponse
+            PeerFailure.SignalingUnavailable -> ChatConnection.SignalingUnavailable
+            PeerFailure.ConnectionFailed -> ChatConnection.Failed
+        }
+    }
+
+    private fun Throwable?.toSendError(): ChatSendError {
+        val e = this as? ChatSendException ?: return ChatSendError.Generic
+        return when (e.reason) {
+            ChatSendException.Reason.NO_PUBLIC_KEY -> ChatSendError.NoPublicKey
+            ChatSendException.Reason.DISCONNECTED -> ChatSendError.Disconnected
+            ChatSendException.Reason.PEER -> when (e.peerFailure) {
+                PeerFailure.PeerOffline -> ChatSendError.PeerOffline
+                PeerFailure.Rejected -> ChatSendError.Rejected
+                PeerFailure.Timeout -> ChatSendError.NoResponse
+                PeerFailure.SignalingUnavailable -> ChatSendError.SignalingUnavailable
+                PeerFailure.ConnectionFailed -> ChatSendError.ConnectionFailed
+                null -> ChatSendError.Generic
+            }
+            else -> ChatSendError.Generic
         }
     }
 
@@ -101,6 +160,7 @@ class ChatViewModel(
                     contactRepository = app.container.contactRepository,
                     messageRepository = app.container.messageRepository,
                     sender = app.container.chatMessageSender,
+                    peerConnector = app.container.peerConnector,
                 )
             }
         }

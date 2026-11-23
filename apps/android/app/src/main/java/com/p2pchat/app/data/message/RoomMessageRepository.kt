@@ -17,4 +17,10 @@ class RoomMessageRepository(
     override suspend fun upsertMessage(message: Message) {
         messageDao.upsert(MessageEntity.fromDomain(message))
     }
+
+    override suspend fun getMessage(id: String): Message? = messageDao.getById(id)?.toDomain()
+
+    override suspend fun updateStatus(id: String, status: MessageStatus) {
+        messageDao.updateStatus(id, status.name)
+    }
 }

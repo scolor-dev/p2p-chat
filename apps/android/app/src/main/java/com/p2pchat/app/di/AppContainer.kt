@@ -14,7 +14,10 @@ import com.p2pchat.app.data.crypto.EcdhSharedSecretProvider
 import com.p2pchat.app.data.crypto.MessageCipher
 import com.p2pchat.app.data.db.AppDatabase
 import com.p2pchat.app.data.message.ChatMessageSender
-import com.p2pchat.app.data.message.NotConnectedChatMessageSender
+import com.p2pchat.app.data.message.DefaultOutgoingMessageTracker
+import com.p2pchat.app.data.message.IncomingMessageHandler
+import com.p2pchat.app.data.message.OutgoingMessageTracker
+import com.p2pchat.app.data.message.P2PChatMessageSender
 import com.p2pchat.app.data.message.MessageRepository
 import com.p2pchat.app.data.message.RoomMessageRepository
 import com.p2pchat.app.data.device.DataStoreDeviceIdentityStore
@@ -57,8 +60,20 @@ class AppContainer(context: Context) {
     /** Room DB を使用するメッセージリポジトリ。#26 が使う。 */
     val messageRepository: MessageRepository by lazy { RoomMessageRepository(database.messageDao()) }
 
-    /** チャット画面の送信処理。実体（P2P で暗号化して送る）は #26 後半で、ここを差し替える。 */
-    val chatMessageSender: ChatMessageSender by lazy { NotConnectedChatMessageSender() }
+    /** 送信したメッセージの状態の更新口（送信開始・ack・失敗）。#28 がタイムアウトと再送を足す。 */
+    val outgoingMessageTracker: OutgoingMessageTracker by lazy { DefaultOutgoingMessageTracker(messageRepository) }
+
+    /** チャット画面の送信処理。P2P で暗号化して送る。 */
+    val chatMessageSender: ChatMessageSender by lazy {
+        P2PChatMessageSender(contactRepository, peerConnector, messageCipher, outgoingMessageTracker)
+    }
+
+    /** 全ての PeerSession からの受信（msg / ack）を処理する。[P2PChatApp] が起動時に start() する。 */
+    val incomingMessageHandler: IncomingMessageHandler by lazy {
+        IncomingMessageHandler(
+            peerConnector, contactRepository, messageRepository, messageCipher, outgoingMessageTracker, appScope,
+        )
+    }
 
     /** 接続先のサーバー設定。DataStore は 1 つのファイルに 1 つだけ作る決まりなので、ここで持つ。 */
     val serverSettingsRepository: ServerSettingsRepository by lazy {

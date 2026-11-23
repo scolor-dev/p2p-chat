@@ -14,4 +14,10 @@ interface MessageDao {
     /** メッセージを追加または更新する。同じ id なら 1 件にまとまる（二重保存防止） */
     @Upsert
     suspend fun upsert(message: MessageEntity)
+
+    @Query("SELECT * FROM messages WHERE id = :id")
+    suspend fun getById(id: String): MessageEntity?
+
+    @Query("UPDATE messages SET status = :status WHERE id = :id")
+    suspend fun updateStatus(id: String, status: String)
 }
