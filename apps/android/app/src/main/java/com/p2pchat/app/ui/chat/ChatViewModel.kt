@@ -19,6 +19,7 @@ import com.p2pchat.app.data.peer.PeerConnector
 import com.p2pchat.app.data.peer.PeerFailure
 import com.p2pchat.app.data.peer.PeerReconnector
 import com.p2pchat.app.data.peer.PeerState
+import com.p2pchat.app.notification.ActiveChatTracker
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -53,6 +54,8 @@ class ChatViewModel(
     decryptFailures: Flow<String> = emptyFlow(),
     /** 画面を開いている間、相手との接続を保つ（切れたら自動でつなぎ直す）。 */
     private val reconnector: PeerReconnector = ConnectOncePeerReconnector(peerConnector),
+    /** この相手のチャットを開いている間は、その相手のメッセージを通知しないために、開いた・閉じたを伝える。 */
+    private val activeChatTracker: ActiveChatTracker = ActiveChatTracker.None,
     /** 画面を開いている間、この相手のメッセージを既読にする。 */
     readStateRepository: ReadStateRepository = NoOpReadStateRepository,
 ) : ViewModel() {
@@ -85,6 +88,14 @@ class ChatViewModel(
     ) { state, reconnecting ->
         // 切れたあとにつなぎ直している間は「再接続中」。つながれば「接続済み」になる
         if (state != PeerState.Open && deviceId in reconnecting) ChatConnection.Reconnecting else state.toConnection()
+    }
+
+    init {
+        activeChatTracker.opened(deviceId)
+    }
+
+    override fun onCleared() {
+        activeChatTracker.closed(deviceId)
     }
 
     init {
@@ -264,6 +275,7 @@ class ChatViewModel(
                     peerConnector = app.container.peerConnector,
                     decryptFailures = app.container.incomingMessageHandler.decryptFailures,
                     reconnector = app.container.peerReconnector,
+                    activeChatTracker = app.container.activeChatTracker,
                     readStateRepository = app.container.readStateRepository,
                 )
             }

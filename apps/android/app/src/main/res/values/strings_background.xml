@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 背面での通信と通知（#61）の文言。strings.xml との衝突を避けるため、別ファイルにしている。 -->
+<resources>
+    <string name="settings_background_section">バックグラウンド</string>
+    <string name="settings_background_comms">バックグラウンドでも通信する</string>
+    <string name="settings_background_comms_hint">オンのとき、アプリが背面にある間も接続を保ち、メッセージを通知します（常駐の通知が表示されます）。オフのときは、アプリを開いている間だけ通信します。</string>
+
+    <string name="notification_channel_connection_name">接続の維持</string>
+    <string name="notification_channel_messages_name">メッセージ</string>
+    <string name="notification_connection_title">接続を維持しています</string>
+    <string name="notification_connection_text">メッセージを受け取るため、バックグラウンドで通信しています</string>
+    <string name="notification_message_public_text">新しいメッセージ</string>
+    <string name="notification_message_you">あなた</string>
+</resources>

@@ -43,6 +43,15 @@ import com.p2pchat.app.data.signaling.ConnectivityNetworkMonitor
 import com.p2pchat.app.data.signaling.DefaultSignalingClient
 import com.p2pchat.app.data.signaling.NetworkMonitor
 import com.p2pchat.app.data.signaling.SignalingClient
+import com.p2pchat.app.data.settings.AppPreferencesRepository
+import com.p2pchat.app.data.settings.DataStoreAppPreferencesRepository
+import com.p2pchat.app.notification.ActiveChatTracker
+import com.p2pchat.app.notification.AndroidMessageNotifier
+import com.p2pchat.app.notification.AppForegroundState
+import com.p2pchat.app.notification.DefaultActiveChatTracker
+import com.p2pchat.app.notification.IncomingMessageNotifier
+import com.p2pchat.app.service.AndroidForegroundServiceLauncher
+import com.p2pchat.app.service.BackgroundConnectionController
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.SupervisorJob
 import okhttp3.OkHttpClient
@@ -176,5 +185,42 @@ class AppContainer(context: Context) {
     /** 端末の身元（deviceId）と登録。#20、#23 は、ここから deviceId と token を読む。 */
     val deviceRepository: DeviceRepository by lazy {
         DefaultDeviceRepository(deviceKeyStore, apiClient, deviceIdentityStore)
+    }
+
+    // --- 背面での通信と通知（#61） ---
+
+    /** アプリの動作の設定（背面でも通信するか、など）。 */
+    val appPreferencesRepository: AppPreferencesRepository by lazy {
+        DataStoreAppPreferencesRepository(
+            PreferenceDataStoreFactory.create { context.preferencesDataStoreFile(DataStoreAppPreferencesRepository.FILE_NAME) },
+        )
+    }
+
+    /** アプリ（プロセス）が前面にあるか。[com.p2pchat.app.P2PChatApp] が更新する。 */
+    val appForegroundState = AppForegroundState()
+
+    /** いまチャット画面を開いている相手。ChatViewModel が更新する。 */
+    val activeChatTracker: ActiveChatTracker = DefaultActiveChatTracker()
+
+    /** 前面・背面と設定から、シグナリングとフォアグラウンドサービスの開始・停止を決める。 */
+    val backgroundConnectionController: BackgroundConnectionController by lazy {
+        BackgroundConnectionController(
+            preferences = appPreferencesRepository,
+            signaling = signalingClient,
+            launcher = AndroidForegroundServiceLauncher(context),
+            scope = appScope,
+        )
+    }
+
+    /** 受信したメッセージの通知。[com.p2pchat.app.P2PChatApp] が起動時に start() する。 */
+    val incomingMessageNotifier: IncomingMessageNotifier by lazy {
+        IncomingMessageNotifier(
+            received = incomingMessageHandler.receivedMessages,
+            contactRepository = contactRepository,
+            appForeground = appForegroundState,
+            activeChat = activeChatTracker,
+            notifier = AndroidMessageNotifier(context),
+            scope = appScope,
+        )
     }
 }

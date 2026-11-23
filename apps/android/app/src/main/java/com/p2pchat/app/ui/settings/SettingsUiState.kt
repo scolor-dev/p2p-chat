@@ -18,6 +18,8 @@ data class SettingsUiState(
     val deviceId: String? = null,
     /** シグナリングサーバーとの接続状態。 */
     val signalingState: SignalingState = SignalingState.Stopped,
+    /** 「バックグラウンドでも通信する」。既定はオン。 */
+    val backgroundCommsEnabled: Boolean = true,
 )
 
 /** 接続テスト（`GET /healthz`）の状態。 */
