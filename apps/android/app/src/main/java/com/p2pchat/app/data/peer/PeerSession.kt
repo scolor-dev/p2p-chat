@@ -9,6 +9,9 @@ const val DATA_CHANNEL_LABEL = "chat"
 /** 接続を試みてから open になるまでの上限（設計書 5-4 の 60 秒）。 */
 const val CONNECT_TIMEOUT_MILLIS = 60_000L
 
+/** ICE が `disconnected`（一時的な不通）になってから、切断とみなすまで待つ時間。その間に戻れば切れなかったことにする。 */
+const val ICE_DISCONNECTED_GRACE_MILLIS = 5_000L
+
 /**
  * 相手 1 人との P2P 接続 1 回分。使い捨てで、[PeerState.Disconnected] か [PeerState.Failed] になったら終わり。
  * つなぎ直すときは [PeerConnector.connect] で新しい [PeerSession] を作る。

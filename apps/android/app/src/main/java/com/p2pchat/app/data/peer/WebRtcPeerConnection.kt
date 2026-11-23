@@ -63,6 +63,7 @@ internal class WebRtcPeerConnection(
                 listener.onConnectionState(
                     when (newState) {
                         PeerConnection.PeerConnectionState.CONNECTED -> RtcConnectionState.Connected
+                        PeerConnection.PeerConnectionState.DISCONNECTED -> RtcConnectionState.Disconnected
                         PeerConnection.PeerConnectionState.FAILED -> RtcConnectionState.Failed
                         PeerConnection.PeerConnectionState.CLOSED -> RtcConnectionState.Closed
                         else -> RtcConnectionState.Other
