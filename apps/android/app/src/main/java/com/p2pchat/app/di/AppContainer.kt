@@ -28,6 +28,8 @@ import com.p2pchat.app.data.network.ApiClient
 import com.p2pchat.app.data.network.OkHttpApiClient
 import com.p2pchat.app.data.network.OkHttpWebSocketClient
 import com.p2pchat.app.data.network.WebSocketClient
+import com.p2pchat.app.data.peer.ConnectionRequestManager
+import com.p2pchat.app.data.peer.DefaultConnectionRequestManager
 import com.p2pchat.app.data.peer.DefaultPeerConnector
 import com.p2pchat.app.data.peer.DefaultPeerReconnector
 import com.p2pchat.app.data.peer.PeerConnector
@@ -125,6 +127,19 @@ class AppContainer(context: Context) {
             signaling = signalingClient,
             contactRepository = contactRepository,
             factory = WebRtcPeerConnectionFactory(context),
+            scope = appScope,
+            unknownOfferHandler = connectionRequestManager,
+        )
+    }
+
+    /** 連絡先にいない相手からの接続の申請（確認ダイアログ）。#27。[peerConnector] に差し込む。 */
+    val connectionRequestManager: ConnectionRequestManager by lazy {
+        DefaultConnectionRequestManager(
+            signaling = signalingClient,
+            apiClient = apiClient,
+            serverSettingsRepository = serverSettingsRepository,
+            contactRepository = contactRepository,
+            peerConnector = { peerConnector },
             scope = appScope,
         )
     }
