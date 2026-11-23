@@ -127,10 +127,17 @@
     <string name="chat_warning_decrypt_failed">復号できないメッセージを受信したため破棄しました（相手の鍵が変わった可能性があります）</string>
     <string name="chat_connection_connecting">接続中…</string>
     <string name="chat_connection_connected">接続済み</string>
+    <string name="chat_connection_reconnecting">再接続中…</string>
     <string name="chat_connection_disconnected">接続が切れました（送信すると再接続します）</string>
     <string name="chat_connection_peer_offline">相手がオンラインではありません</string>
     <string name="chat_connection_rejected">接続を拒否されました</string>
     <string name="chat_connection_no_response">応答がありません</string>
     <string name="chat_connection_signaling_unavailable">サーバーに接続していません</string>
     <string name="chat_connection_failed">接続できませんでした</string>
+
+    <string name="connection_request_title">接続の申請</string>
+    <string name="connection_request_message">%1$s さんから接続の申請があります。許可すると、連絡先（未確認）に追加されます。</string>
+    <string name="connection_request_remaining">あと %1$d 秒</string>
+    <string name="connection_request_allow">許可</string>
+    <string name="connection_request_deny">拒否</string>
 </resources>

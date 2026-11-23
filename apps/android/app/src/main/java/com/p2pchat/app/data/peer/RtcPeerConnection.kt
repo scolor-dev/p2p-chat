@@ -33,8 +33,11 @@ interface RtcListener {
     fun onMessage(text: String)
 }
 
-/** ICE の接続状態のうち、このアプリで区別するもの。`disconnected` は一時的なので [Other]（#29 が必要なら足す）。 */
-enum class RtcConnectionState { Connected, Failed, Closed, Other }
+/**
+ * ICE の接続状態のうち、このアプリで区別するもの。
+ * [Disconnected] は一時的な不通。すぐ [Connected] に戻ることがあるので、[DefaultPeerSession] が少し待ってから切断とみなす。
+ */
+enum class RtcConnectionState { Connected, Disconnected, Failed, Closed, Other }
 
 fun interface RtcPeerConnectionFactory {
     fun create(listener: RtcListener): RtcPeerConnection

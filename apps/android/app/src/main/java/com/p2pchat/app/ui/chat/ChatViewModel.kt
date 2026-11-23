@@ -12,8 +12,10 @@ import com.p2pchat.app.data.message.ChatSendException
 import com.p2pchat.app.data.message.MessageDirection
 import com.p2pchat.app.data.message.MessageRepository
 import com.p2pchat.app.data.message.MessageStatus
+import com.p2pchat.app.data.peer.ConnectOncePeerReconnector
 import com.p2pchat.app.data.peer.PeerConnector
 import com.p2pchat.app.data.peer.PeerFailure
+import com.p2pchat.app.data.peer.PeerReconnector
 import com.p2pchat.app.data.peer.PeerState
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
@@ -46,6 +48,8 @@ class ChatViewModel(
     private val peerConnector: PeerConnector,
     /** 復号できずに捨てた `msg` の送り主（端末 ID）。自分の相手の分だけ警告に使う。 */
     decryptFailures: Flow<String> = emptyFlow(),
+    /** 画面を開いている間、相手との接続を保つ（切れたら自動でつなぎ直す）。 */
+    private val reconnector: PeerReconnector = ConnectOncePeerReconnector(peerConnector),
 ) : ViewModel() {
 
     private data class InputState(
@@ -64,15 +68,20 @@ class ChatViewModel(
     private var decryptWarningJob: Job? = null
 
     /** 相手の最新の session の状態。session がまだ無い間は null（接続中として扱う）。 */
-    private val connection = peerConnector.sessions
-        .map { it[deviceId] }
-        .distinctUntilChanged()
-        .flatMapLatest { session -> session?.state ?: flowOf(null) }
-        .map { it.toConnection() }
+    private val connection = combine(
+        peerConnector.sessions
+            .map { it[deviceId] }
+            .distinctUntilChanged()
+            .flatMapLatest { session -> session?.state ?: flowOf(null) },
+        reconnector.reconnecting,
+    ) { state, reconnecting ->
+        // 切れたあとにつなぎ直している間は「再接続中」。つながれば「接続済み」になる
+        if (state != PeerState.Open && deviceId in reconnecting) ChatConnection.Reconnecting else state.toConnection()
+    }
 
     init {
-        // 画面を開いたら接続する。接続中・open の session があればそれが返る。
-        viewModelScope.launch { peerConnector.connect(deviceId) }
+        // 画面を開いたら接続し、閉じる（ViewModel が破棄される）まで、切れたらつなぎ直す。
+        viewModelScope.launch { reconnector.keepConnected(deviceId) }
         viewModelScope.launch {
             decryptFailures.filter { it == deviceId }.collect {
                 decryptWarning.value = true
@@ -216,6 +225,7 @@ class ChatViewModel(
                     sender = app.container.chatMessageSender,
                     peerConnector = app.container.peerConnector,
                     decryptFailures = app.container.incomingMessageHandler.decryptFailures,
+                    reconnector = app.container.peerReconnector,
                 )
             }
         }

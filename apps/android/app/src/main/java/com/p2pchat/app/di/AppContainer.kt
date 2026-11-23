@@ -28,8 +28,12 @@ import com.p2pchat.app.data.network.ApiClient
 import com.p2pchat.app.data.network.OkHttpApiClient
 import com.p2pchat.app.data.network.OkHttpWebSocketClient
 import com.p2pchat.app.data.network.WebSocketClient
+import com.p2pchat.app.data.peer.ConnectionRequestManager
+import com.p2pchat.app.data.peer.DefaultConnectionRequestManager
 import com.p2pchat.app.data.peer.DefaultPeerConnector
+import com.p2pchat.app.data.peer.DefaultPeerReconnector
 import com.p2pchat.app.data.peer.PeerConnector
+import com.p2pchat.app.data.peer.PeerReconnector
 import com.p2pchat.app.data.peer.WebRtcPeerConnectionFactory
 import com.p2pchat.app.data.settings.DataStoreServerSettingsRepository
 import com.p2pchat.app.data.settings.ServerSettingsRepository
@@ -124,7 +128,25 @@ class AppContainer(context: Context) {
             contactRepository = contactRepository,
             factory = WebRtcPeerConnectionFactory(context),
             scope = appScope,
+            unknownOfferHandler = connectionRequestManager,
         )
+    }
+
+    /** 連絡先にいない相手からの接続の申請（確認ダイアログ）。#27。[peerConnector] に差し込む。 */
+    val connectionRequestManager: ConnectionRequestManager by lazy {
+        DefaultConnectionRequestManager(
+            signaling = signalingClient,
+            apiClient = apiClient,
+            serverSettingsRepository = serverSettingsRepository,
+            contactRepository = contactRepository,
+            peerConnector = { peerConnector },
+            scope = appScope,
+        )
+    }
+
+    /** チャット画面を開いている間、相手との P2P 接続を保つ（#29）。 */
+    val peerReconnector: PeerReconnector by lazy {
+        DefaultPeerReconnector(peerConnector, signalingClient, networkMonitor)
     }
 
     /** この端末の鍵ペア（Keystore の P-256）。秘密鍵への参照は [messageCipher] が使う。 */

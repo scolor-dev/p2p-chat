@@ -405,6 +405,32 @@ class DefaultPeerConnectorTest {
     }
 
     @Test
+    fun `ICE が disconnected のまま猶予を過ぎたら切断、戻れば切断にしない`() = runTest {
+        val env = env(small, large, "4444444444444444")
+        val lost = env.connector.connect(large)
+        val recovered = env.connector.connect("4444444444444444")
+        runCurrent()
+        val (rtc1, rtc2) = env.factory.created
+        rtc1.listener.onChannelOpen()
+        rtc2.listener.onChannelOpen()
+        runCurrent()
+
+        rtc1.listener.onConnectionState(RtcConnectionState.Disconnected)
+        rtc2.listener.onConnectionState(RtcConnectionState.Disconnected)
+        runCurrent()
+        advanceTimeBy(ICE_DISCONNECTED_GRACE_MILLIS - 1_000)
+        rtc2.listener.onConnectionState(RtcConnectionState.Connected)
+        runCurrent()
+        assertEquals(PeerState.Open, lost.state.value)
+
+        advanceTimeBy(1_001)
+        runCurrent()
+        assertEquals(PeerState.Disconnected, lost.state.value)
+        assertEquals(PeerState.Open, recovered.state.value)
+        assertTrue(rtc1.closed)
+    }
+
+    @Test
     fun `disconnect で切ると Disconnected になり PeerConnection を閉じる`() = runTest {
         val env = env(small, large)
         val session = env.connector.connect(large)

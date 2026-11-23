@@ -27,6 +27,9 @@ enum class ChatConnection {
     Connecting,
     Connected,
 
+    /** 切れた・失敗したあと、自動でつなぎ直している。 */
+    Reconnecting,
+
     /** 接続が切れた（open だったものが閉じた）。 */
     Disconnected,
     PeerOffline,
