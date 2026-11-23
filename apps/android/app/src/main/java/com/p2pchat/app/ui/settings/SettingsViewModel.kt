@@ -8,6 +8,7 @@ import androidx.lifecycle.viewmodel.viewModelFactory
 import com.p2pchat.app.P2PChatApp
 import com.p2pchat.app.data.device.DeviceRepository
 import com.p2pchat.app.data.network.ApiClient
+import com.p2pchat.app.data.settings.AppPreferencesRepository
 import com.p2pchat.app.data.settings.ServerSettings
 import com.p2pchat.app.data.settings.ServerSettingsRepository
 import com.p2pchat.app.data.signaling.SignalingClient
@@ -28,6 +29,7 @@ class SettingsViewModel(
     private val apiClient: ApiClient,
     private val deviceRepository: DeviceRepository,
     private val signalingClient: SignalingClient,
+    private val appPreferences: AppPreferencesRepository,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(SettingsUiState())
@@ -63,6 +65,18 @@ class SettingsViewModel(
                 _uiState.update { it.copy(signalingState = state) }
             }
         }
+    }
+
+    init {
+        viewModelScope.launch {
+            appPreferences.backgroundCommsEnabled.collect { enabled ->
+                _uiState.update { it.copy(backgroundCommsEnabled = enabled) }
+            }
+        }
+    }
+
+    fun onBackgroundCommsChange(enabled: Boolean) {
+        viewModelScope.launch { appPreferences.setBackgroundCommsEnabled(enabled) }
     }
 
     fun onHostChange(host: String) {
@@ -124,6 +138,7 @@ class SettingsViewModel(
                     app.container.apiClient,
                     app.container.deviceRepository,
                     app.container.signalingClient,
+                    app.container.appPreferencesRepository,
                 )
             }
         }

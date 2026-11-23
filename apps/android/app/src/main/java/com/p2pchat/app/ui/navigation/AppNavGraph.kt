@@ -1,6 +1,13 @@
 package com.p2pchat.app.ui.navigation
 
+import android.content.Intent
+import androidx.activity.ComponentActivity
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.ui.platform.LocalContext
+import androidx.core.util.Consumer
+import androidx.navigation.navDeepLink
+import com.p2pchat.app.notification.ChatDeepLink
 import androidx.compose.runtime.getValue
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -20,6 +27,14 @@ import com.p2pchat.app.ui.settings.SettingsScreen
 @Composable
 fun AppNavGraph(startViewModel: StartViewModel = viewModel(factory = StartViewModel.Factory)) {
     val navController = rememberNavController()
+
+    // 通知のタップ（既に開いている Activity への新しい Intent）で、その相手のチャットを開く
+    val activity = LocalContext.current as? ComponentActivity
+    DisposableEffect(activity, navController) {
+        val listener = Consumer<Intent> { intent -> navController.handleDeepLink(intent) }
+        activity?.addOnNewIntentListener(listener)
+        onDispose { activity?.removeOnNewIntentListener(listener) }
+    }
 
     // 登録済みかどうかが分かるまでは、何も表示しない（登録画面が一瞬見えるのを防ぐ）
     val start by startViewModel.start.collectAsStateWithLifecycle()
@@ -47,7 +62,7 @@ fun AppNavGraph(startViewModel: StartViewModel = viewModel(factory = StartViewMo
                 onSettingsClick = { navController.navigate(Settings) },
             )
         }
-        composable<Chat> { entry ->
+        composable<Chat>(deepLinks = listOf(navDeepLink<Chat>(basePath = ChatDeepLink.BASE))) { entry ->
             ChatScreen(
                 deviceId = entry.toRoute<Chat>().deviceId,
                 onBack = { navController.popBackStack() },

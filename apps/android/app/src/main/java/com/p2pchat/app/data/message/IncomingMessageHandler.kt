@@ -49,6 +49,11 @@ class IncomingMessageHandler(
     /** 復号に失敗して捨てた `msg` の送り主（相手の端末 ID）。購読していない間のものは捨てる。 */
     val decryptFailures: SharedFlow<String> = _decryptFailures.asSharedFlow()
 
+    private val _receivedMessages = MutableSharedFlow<Message>(extraBufferCapacity = 64, onBufferOverflow = BufferOverflow.DROP_OLDEST)
+
+    /** 新しく保存した受信メッセージ（通知用。重複で届いた分は流さない）。購読していない間のものは捨てる。 */
+    val receivedMessages: SharedFlow<Message> = _receivedMessages.asSharedFlow()
+
     /** 1 回だけ有効。2 回目以降は何もしない。 */
     fun start() {
         if (!started.compareAndSet(false, true)) return
@@ -111,9 +116,9 @@ class IncomingMessageHandler(
         }
         if (body.isBlank()) return
 
-        messageRepository.upsertMessage(
-            Message(frame.id, deviceId, MessageDirection.RECEIVED, body, MessageStatus.SENT, clock()),
-        )
+        val message = Message(frame.id, deviceId, MessageDirection.RECEIVED, body, MessageStatus.SENT, clock())
+        messageRepository.upsertMessage(message)
+        _receivedMessages.tryEmit(message)
         sendAck(session, frame.id)
     }
 

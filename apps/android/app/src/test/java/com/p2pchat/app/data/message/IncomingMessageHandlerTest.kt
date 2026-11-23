@@ -66,6 +66,20 @@ class IncomingMessageHandlerTest {
     }
 
     @Test
+    fun 新しく保存した受信だけreceivedMessagesに流れる() = runTest {
+        val handler = startHandler()
+        val received = mutableListOf<Message>()
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { handler.receivedMessages.collect { received += it } }
+        runCurrent()
+
+        session.receive(msgFrame("one"))
+        session.receive(msgFrame("one"))
+        runCurrent()
+
+        assertEquals(listOf("one"), received.map { it.body })
+    }
+
+    @Test
     fun 同じidが再び届いても1件のままackだけ返す() = runTest {
         startHandler()
 

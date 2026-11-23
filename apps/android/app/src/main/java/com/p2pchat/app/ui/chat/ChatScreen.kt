@@ -52,6 +52,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.p2pchat.app.R
+import com.p2pchat.app.ui.notification.RequestNotificationPermissionOnFirstChat
 import com.p2pchat.app.ui.theme.LocalChatColors
 import com.p2pchat.app.ui.theme.P2PChatTheme
 
@@ -63,6 +64,7 @@ fun ChatScreen(
     viewModel: ChatViewModel = viewModel(key = deviceId, factory = ChatViewModel.factory(deviceId)),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    RequestNotificationPermissionOnFirstChat()
     ChatContent(
         uiState = uiState,
         onBack = onBack,

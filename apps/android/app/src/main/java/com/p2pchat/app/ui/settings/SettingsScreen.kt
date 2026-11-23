@@ -20,6 +20,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -36,6 +37,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.p2pchat.app.R
 import com.p2pchat.app.data.signaling.DisconnectReason
 import com.p2pchat.app.data.signaling.SignalingState
+import com.p2pchat.app.ui.notification.rememberNotificationPermissionRequester
 import com.p2pchat.app.ui.theme.P2PChatTheme
 
 /** 設定画面の入口。接続先のサーバー（IP アドレスとポート）を入力・保存し、接続を試せる。 */
@@ -45,6 +47,7 @@ fun SettingsScreen(
     viewModel: SettingsViewModel = viewModel(factory = SettingsViewModel.Factory),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val requestNotificationPermission = rememberNotificationPermissionRequester()
     SettingsContent(
         uiState = uiState,
         onBack = onBack,
@@ -52,6 +55,11 @@ fun SettingsScreen(
         onPortChange = viewModel::onPortChange,
         onSave = viewModel::save,
         onTestConnection = viewModel::testConnection,
+        onBackgroundCommsChange = { enabled ->
+            viewModel.onBackgroundCommsChange(enabled)
+            // オンにしたときに、通知の権限を求める（拒否されても動き続ける）
+            if (enabled) requestNotificationPermission()
+        },
     )
 }
 
@@ -65,6 +73,7 @@ fun SettingsContent(
     onPortChange: (String) -> Unit,
     onSave: () -> Unit,
     onTestConnection: () -> Unit,
+    onBackgroundCommsChange: (Boolean) -> Unit = {},
 ) {
     Scaffold(
         topBar = {
@@ -137,6 +146,15 @@ fun SettingsContent(
                 Text(stringResource(R.string.settings_saved), style = MaterialTheme.typography.bodySmall)
             }
             ConnectionTestResult(uiState.connectionTest)
+            Text(stringResource(R.string.settings_background_section), style = MaterialTheme.typography.titleMedium)
+            Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    text = stringResource(R.string.settings_background_comms),
+                    modifier = Modifier.weight(1f),
+                )
+                Switch(checked = uiState.backgroundCommsEnabled, onCheckedChange = onBackgroundCommsChange)
+            }
+            Text(stringResource(R.string.settings_background_comms_hint), style = MaterialTheme.typography.bodySmall)
             Text(stringResource(R.string.settings_signaling_section), style = MaterialTheme.typography.titleMedium)
             SignalingStatus(uiState.signalingState)
             Text(stringResource(R.string.settings_device_section), style = MaterialTheme.typography.titleMedium)
