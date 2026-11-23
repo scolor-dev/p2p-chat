@@ -1,9 +1,17 @@
 package com.p2pchat.app.ui.contacts
 
+import org.junit.Assert.assertFalse
+import kotlinx.coroutines.test.UnconfinedTestDispatcher
+import kotlinx.coroutines.test.TestScope
+import kotlinx.coroutines.launch
+import com.p2pchat.app.data.signaling.SignalingState
+import com.p2pchat.app.data.device.DeviceIdentity
 import com.p2pchat.app.MainDispatcherRule
 import com.p2pchat.app.data.contact.Contact
 import com.p2pchat.app.data.contact.ContactRepository
 import com.p2pchat.app.data.crypto.PublicKeyFingerprint
+import com.p2pchat.app.data.device.FakeDeviceRepository
+import com.p2pchat.app.data.signaling.FakeSignalingClient
 import com.p2pchat.app.data.message.InMemoryMessageRepository
 import com.p2pchat.app.data.message.InMemoryReadStateRepository
 import com.p2pchat.app.data.message.Message
@@ -44,7 +52,7 @@ class ContactsViewModelTest {
 
     @Test
     fun 連絡先がない間は読み込み完了で空の一覧になる() = runTest {
-        val viewModel = ContactsViewModel(FakeContactRepository(), InMemoryMessageRepository(), InMemoryReadStateRepository())
+        val viewModel = ContactsViewModel(FakeContactRepository(), InMemoryMessageRepository(), InMemoryReadStateRepository(), FakeDeviceRepository(), FakeSignalingClient())
 
         val state = viewModel.uiState.first { !it.isLoading }
 
@@ -54,7 +62,7 @@ class ContactsViewModelTest {
     @Test
     fun Repositoryの連絡先が画面の状態に反映される() = runTest {
         val repository = FakeContactRepository()
-        val viewModel = ContactsViewModel(repository, InMemoryMessageRepository(), InMemoryReadStateRepository())
+        val viewModel = ContactsViewModel(repository, InMemoryMessageRepository(), InMemoryReadStateRepository(), FakeDeviceRepository(), FakeSignalingClient())
         val alice = Contact(deviceId = "a1", name = "Alice", publicKey = "", isVerified = false, createdAt = 1000L)
 
         repository.contacts.value = listOf(alice)
@@ -73,7 +81,7 @@ class ContactsViewModelTest {
     @Test
     fun メッセージが無い相手は本文が空で未確認と送信失敗は立たない() = runTest {
         val repository = FakeContactRepository()
-        val viewModel = ContactsViewModel(repository, InMemoryMessageRepository(), InMemoryReadStateRepository())
+        val viewModel = ContactsViewModel(repository, InMemoryMessageRepository(), InMemoryReadStateRepository(), FakeDeviceRepository(), FakeSignalingClient())
         repository.contacts.value = listOf(
             Contact(deviceId = "a1", name = "Alice", publicKey = "", isVerified = false, createdAt = 1000L),
         )
@@ -89,7 +97,7 @@ class ContactsViewModelTest {
     fun 最新メッセージの本文と送信失敗が相手ごとに反映される() = runTest {
         val contacts = FakeContactRepository()
         val messages = InMemoryMessageRepository()
-        val viewModel = ContactsViewModel(contacts, messages, InMemoryReadStateRepository())
+        val viewModel = ContactsViewModel(contacts, messages, InMemoryReadStateRepository(), FakeDeviceRepository(), FakeSignalingClient())
         contacts.contacts.value = listOf(
             Contact("a1", "Alice", "", false, 1L),
             Contact("b2", "Bob", "", false, 2L),
@@ -122,7 +130,7 @@ class ContactsViewModelTest {
     fun 送信失敗が再送で送信中に戻ると一覧のエラーが消える() = runTest {
         val contacts = FakeContactRepository()
         val messages = InMemoryMessageRepository()
-        val viewModel = ContactsViewModel(contacts, messages, InMemoryReadStateRepository())
+        val viewModel = ContactsViewModel(contacts, messages, InMemoryReadStateRepository(), FakeDeviceRepository(), FakeSignalingClient())
         contacts.contacts.value = listOf(Contact("a1", "Alice", "", false, 1L))
         messages.messages.value = listOf(message("1", "a1", MessageDirection.SENT, MessageStatus.FAILED, 1))
         assertEquals(true, viewModel.uiState.first { it.contacts.isNotEmpty() && it.contacts.single().sendError }.contacts.single().sendError)
@@ -135,7 +143,7 @@ class ContactsViewModelTest {
     @Test
     fun 確認状態と公開鍵のフィンガープリントが一覧に渡る() = runTest {
         val repository = FakeContactRepository()
-        val viewModel = ContactsViewModel(repository, InMemoryMessageRepository(), InMemoryReadStateRepository())
+        val viewModel = ContactsViewModel(repository, InMemoryMessageRepository(), InMemoryReadStateRepository(), FakeDeviceRepository(), FakeSignalingClient())
         val der = "abc".toByteArray()
         repository.contacts.value = listOf(
             Contact("a1", "Alice", Base64.getEncoder().encodeToString(der), isVerified = true, createdAt = 1L),
@@ -156,7 +164,7 @@ class ContactsViewModelTest {
         val contacts = FakeContactRepository()
         val messages = InMemoryMessageRepository()
         val reads = InMemoryReadStateRepository()
-        val viewModel = ContactsViewModel(contacts, messages, reads)
+        val viewModel = ContactsViewModel(contacts, messages, reads, FakeDeviceRepository(), FakeSignalingClient())
         contacts.contacts.value = listOf(
             Contact("a1", "Alice", "", false, 1L),
             Contact("b2", "Bob", "", false, 2L),
@@ -185,7 +193,7 @@ class ContactsViewModelTest {
     fun 一覧は最新メッセージの新しい順でメッセージのない相手は名前順で後ろになる() = runTest {
         val contacts = FakeContactRepository()
         val messages = InMemoryMessageRepository()
-        val viewModel = ContactsViewModel(contacts, messages, InMemoryReadStateRepository())
+        val viewModel = ContactsViewModel(contacts, messages, InMemoryReadStateRepository(), FakeDeviceRepository(), FakeSignalingClient())
         contacts.contacts.value = listOf(
             Contact("z", "Zed", "", false, 1L),
             Contact("a1", "Alice", "", false, 2L),
@@ -200,5 +208,91 @@ class ContactsViewModelTest {
         val names = viewModel.uiState.first { it.contacts.size == 4 }.contacts.map { it.name }
 
         assertEquals(listOf("Carol", "Bob", "Alice", "Zed"), names)
+    }
+
+    private fun TestScope.subscribe(viewModel: ContactsViewModel) {
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { viewModel.uiState.collect {} }
+    }
+
+    @Test
+    fun バナーは認証エラーのときだけ出る() = runTest {
+        val signaling = FakeSignalingClient(SignalingState.Stopped)
+        val viewModel = ContactsViewModel(
+            FakeContactRepository(), InMemoryMessageRepository(), InMemoryReadStateRepository(),
+            FakeDeviceRepository(DeviceIdentity("a1b2c3d4e5f60718", "tok")), signaling,
+        )
+        subscribe(viewModel)
+
+        val others = listOf(
+            SignalingState.Stopped,
+            SignalingState.NotConfigured,
+            SignalingState.Connecting(1),
+            SignalingState.Ready("a1b2c3d4e5f60718"),
+            SignalingState.WaitingToReconnect(1, 1000, null),
+        )
+        for (state in others) {
+            signaling.state.value = state
+            assertFalse("$state", viewModel.uiState.value.isUnauthorized)
+        }
+        signaling.state.value = SignalingState.Unauthorized
+        assertTrue(viewModel.uiState.value.isUnauthorized)
+        signaling.state.value = SignalingState.Connecting(1)
+        assertFalse(viewModel.uiState.value.isUnauthorized)
+    }
+
+    @Test
+    fun 再登録は確認ダイアログを経ないと身元を消さない() = runTest {
+        val device = FakeDeviceRepository(DeviceIdentity("a1b2c3d4e5f60718", "tok"))
+        val viewModel = ContactsViewModel(
+            FakeContactRepository(), InMemoryMessageRepository(), InMemoryReadStateRepository(),
+            device, FakeSignalingClient(SignalingState.Unauthorized),
+        )
+        subscribe(viewModel)
+
+        // ダイアログを出さずに確定しても消えない
+        viewModel.onReRegisterConfirm()
+        assertEquals(0, device.clearCalls)
+
+        // バナーのボタンはダイアログを出すだけ
+        viewModel.onReRegisterClick()
+        assertTrue(viewModel.uiState.value.showReRegisterDialog)
+        assertEquals(0, device.clearCalls)
+
+        // キャンセルでは消えない
+        viewModel.onReRegisterDismiss()
+        assertFalse(viewModel.uiState.value.showReRegisterDialog)
+        viewModel.onReRegisterConfirm()
+        assertEquals(0, device.clearCalls)
+        assertEquals("a1b2c3d4e5f60718", device.identity.value?.deviceId)
+
+        // 確認すると消える
+        viewModel.onReRegisterClick()
+        viewModel.onReRegisterConfirm()
+        assertEquals(1, device.clearCalls)
+        assertNull(device.identity.value)
+        assertFalse(viewModel.uiState.value.showReRegisterDialog)
+    }
+
+    @Test
+    fun 再登録しても連絡先とメッセージは残る() = runTest {
+        val contacts = FakeContactRepository()
+        val messages = InMemoryMessageRepository()
+        val device = FakeDeviceRepository(DeviceIdentity("a1b2c3d4e5f60718", "tok"))
+        val viewModel = ContactsViewModel(
+            contacts, messages, InMemoryReadStateRepository(), device, FakeSignalingClient(SignalingState.Unauthorized),
+        )
+        subscribe(viewModel)
+        contacts.contacts.value = listOf(Contact("a1", "Alice", "", false, 1L))
+        messages.messages.value = listOf(message("1", "a1", MessageDirection.RECEIVED, MessageStatus.SENT, 10))
+
+        viewModel.onReRegisterClick()
+        viewModel.onReRegisterConfirm()
+
+        assertNull(device.identity.value)
+        assertEquals(1, contacts.contacts.value.size)
+        assertEquals(1, messages.messages.value.size)
+        val state = viewModel.uiState.value
+        assertEquals("Alice", state.contacts.single().name)
+        assertEquals("body-1", state.contacts.single().latestMessage)
     }
 }

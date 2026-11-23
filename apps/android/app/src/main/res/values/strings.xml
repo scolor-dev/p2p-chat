@@ -140,4 +140,13 @@
     <string name="connection_request_remaining">あと %1$d 秒</string>
     <string name="connection_request_allow">許可</string>
     <string name="connection_request_deny">拒否</string>
+
+    <!-- 再登録（#64） -->
+    <string name="reregister_banner_message">認証をやり直す必要があります</string>
+    <string name="reregister_banner_button">再登録</string>
+    <string name="reregister_settings_button">この端末を再登録する</string>
+    <string name="reregister_dialog_title">この端末を再登録しますか？</string>
+    <string name="reregister_dialog_message">端末 ID が変わります。相手の連絡先にあるあなたの ID は古くなるので、相手に新しい ID で追加し直してもらう必要があります。連絡先とメッセージの履歴は残ります。</string>
+    <string name="reregister_dialog_confirm">再登録する</string>
+    <string name="reregister_dialog_cancel">キャンセル</string>
 </resources>

@@ -411,4 +411,26 @@ class DefaultSignalingClientTest {
         /** [FakeConnection.fail] の理由。 */
         val FAILED = DisconnectReason.Failed("つながりません")
     }
+
+    @Test
+    fun 認証エラーのあと再登録して新しい身元になると新しいtokenでつなぎ直す() = runTest {
+        val client = startedClient()
+        webSocket.connections.single().fail(httpStatus = 401)
+        runCurrent()
+        assertEquals(SignalingState.Unauthorized, client.current)
+
+        // 再登録: 身元が消え、新しい身元が保存される
+        deviceRepository.clearIdentity()
+        runCurrent()
+        assertEquals(SignalingState.NotConfigured, client.current)
+        deviceRepository.identity.value = DeviceIdentity("0123456789abcdef", "new-token")
+        runCurrent()
+
+        assertEquals(2, webSocket.connections.size)
+        assertEquals("Bearer new-token", webSocket.connections.last().headers["Authorization"])
+        webSocket.connections.last().open()
+        webSocket.connections.last().ready("0123456789abcdef")
+        runCurrent()
+        assertEquals(SignalingState.Ready("0123456789abcdef"), client.current)
+    }
 }

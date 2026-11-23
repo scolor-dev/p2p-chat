@@ -4,6 +4,7 @@ import android.content.Intent
 import androidx.activity.ComponentActivity
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.platform.LocalContext
 import androidx.core.util.Consumer
 import androidx.navigation.navDeepLink
@@ -42,6 +43,13 @@ fun AppNavGraph(startViewModel: StartViewModel = viewModel(factory = StartViewMo
         StartDestination.Loading -> return
         StartDestination.Registration -> Registration
         StartDestination.Contacts -> Contacts
+    }
+
+    // 再登録（身元が消えた）ら、登録画面へ戻す。戻る操作で元の画面には戻れないよう、スタックを空にする
+    LaunchedEffect(startViewModel, navController) {
+        startViewModel.identityCleared.collect {
+            navController.navigate(Registration) { popUpTo(navController.graph.id) { inclusive = true } }
+        }
     }
 
     NavHost(navController = navController, startDestination = startDestination) {

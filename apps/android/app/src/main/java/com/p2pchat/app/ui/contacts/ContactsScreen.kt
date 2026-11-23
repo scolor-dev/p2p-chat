@@ -48,6 +48,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.p2pchat.app.R
 import com.p2pchat.app.data.crypto.PublicKeyFingerprint
+import com.p2pchat.app.ui.registration.ReRegisterDialog
 import com.p2pchat.app.ui.theme.P2PChatTheme
 
 /**
@@ -69,6 +70,9 @@ fun ContactsScreen(
         onQrClick = onQrClick,
         onAddClick = onAddClick,
         onSettingsClick = onSettingsClick,
+        onReRegisterClick = viewModel::onReRegisterClick,
+        onReRegisterConfirm = viewModel::onReRegisterConfirm,
+        onReRegisterDismiss = viewModel::onReRegisterDismiss,
     )
 }
 
@@ -81,6 +85,9 @@ fun ContactsContent(
     onQrClick: () -> Unit,
     onAddClick: () -> Unit,
     onSettingsClick: () -> Unit,
+    onReRegisterClick: () -> Unit = {},
+    onReRegisterConfirm: () -> Unit = {},
+    onReRegisterDismiss: () -> Unit = {},
 ) {
     var selectedContactForDetails by remember { mutableStateOf<ContactListItemUiModel?>(null) }
 
@@ -125,32 +132,39 @@ fun ContactsContent(
             )
         },
     ) { innerPadding ->
-        Box(Modifier.fillMaxSize().padding(innerPadding)) {
-            when {
-                uiState.isLoading -> CircularProgressIndicator(
-                    modifier = Modifier.align(Alignment.Center),
-                    color = MaterialTheme.colorScheme.primary,
-                )
-                uiState.errorMessage != null -> Text(
-                    text = stringResource(R.string.contacts_load_error),
-                    modifier = Modifier.align(Alignment.Center),
-                )
-                uiState.contacts.isEmpty() -> Text(
-                    text = stringResource(R.string.contacts_empty),
-                    modifier = Modifier.align(Alignment.Center),
-                )
-                else -> LazyColumn {
-                    items(uiState.contacts, key = { it.deviceId }) { contact ->
-                        ContactListItem(
-                            contact = contact,
-                            onClick = { onContactClick(contact.deviceId) },
-                            onInfoClick = { selectedContactForDetails = contact },
-                        )
-                        HorizontalDivider()
+        Column(Modifier.fillMaxSize().padding(innerPadding)) {
+            if (uiState.isUnauthorized) ReRegisterBanner(onClick = onReRegisterClick)
+            Box(Modifier.weight(1f).fillMaxWidth()) {
+                when {
+                    uiState.isLoading -> CircularProgressIndicator(
+                        modifier = Modifier.align(Alignment.Center),
+                        color = MaterialTheme.colorScheme.primary,
+                    )
+                    uiState.errorMessage != null -> Text(
+                        text = stringResource(R.string.contacts_load_error),
+                        modifier = Modifier.align(Alignment.Center),
+                    )
+                    uiState.contacts.isEmpty() -> Text(
+                        text = stringResource(R.string.contacts_empty),
+                        modifier = Modifier.align(Alignment.Center),
+                    )
+                    else -> LazyColumn {
+                        items(uiState.contacts, key = { it.deviceId }) { contact ->
+                            ContactListItem(
+                                contact = contact,
+                                onClick = { onContactClick(contact.deviceId) },
+                                onInfoClick = { selectedContactForDetails = contact },
+                            )
+                            HorizontalDivider()
+                        }
                     }
                 }
             }
         }
+    }
+
+    if (uiState.showReRegisterDialog) {
+        ReRegisterDialog(onConfirm = onReRegisterConfirm, onDismiss = onReRegisterDismiss)
     }
 
     selectedContactForDetails?.let { contact ->
@@ -158,6 +172,29 @@ fun ContactsContent(
             contact = contact,
             onDismiss = { selectedContactForDetails = null },
         )
+    }
+}
+
+/** 認証エラー（`SignalingState.Unauthorized`）のときだけ、一覧の上に出す案内。 */
+@Composable
+private fun ReRegisterBanner(onClick: () -> Unit) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(MaterialTheme.colorScheme.errorContainer)
+            .padding(start = 16.dp, end = 8.dp, top = 8.dp, bottom = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            text = stringResource(R.string.reregister_banner_message),
+            color = MaterialTheme.colorScheme.onErrorContainer,
+            style = MaterialTheme.typography.bodyMedium,
+            fontWeight = FontWeight.Bold,
+            modifier = Modifier.weight(1f),
+        )
+        TextButton(onClick = onClick) {
+            Text(stringResource(R.string.reregister_banner_button), color = MaterialTheme.colorScheme.error)
+        }
     }
 }
 

@@ -33,6 +33,11 @@ class DefaultDeviceRepository(
 
     override val identity: Flow<DeviceIdentity?> get() = identityStore.identity
 
+    override suspend fun clearIdentity() {
+        // 登録の最中なら終わるのを待つ（登録が保存した直後の身元を、取りこぼさず消す）。鍵ペアは消さない
+        registerLock.withLock { withContext(ioDispatcher + NonCancellable) { identityStore.clear() } }
+    }
+
     override suspend fun register(server: ServerSettings, name: String): Result<DeviceIdentity> =
         registerLock.withLock {
             identityStore.identity.first()?.let { return@withLock Result.success(it) }
