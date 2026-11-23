@@ -13,6 +13,8 @@ import com.p2pchat.app.data.crypto.DeviceKeyStore
 import com.p2pchat.app.data.crypto.EcdhSharedSecretProvider
 import com.p2pchat.app.data.crypto.MessageCipher
 import com.p2pchat.app.data.db.AppDatabase
+import com.p2pchat.app.data.message.ChatMessageSender
+import com.p2pchat.app.data.message.NotConnectedChatMessageSender
 import com.p2pchat.app.data.message.MessageRepository
 import com.p2pchat.app.data.message.RoomMessageRepository
 import com.p2pchat.app.data.device.DataStoreDeviceIdentityStore
@@ -54,6 +56,9 @@ class AppContainer(context: Context) {
 
     /** Room DB を使用するメッセージリポジトリ。#26 が使う。 */
     val messageRepository: MessageRepository by lazy { RoomMessageRepository(database.messageDao()) }
+
+    /** チャット画面の送信処理。実体（P2P で暗号化して送る）は #26 後半で、ここを差し替える。 */
+    val chatMessageSender: ChatMessageSender by lazy { NotConnectedChatMessageSender() }
 
     /** 接続先のサーバー設定。DataStore は 1 つのファイルに 1 つだけ作る決まりなので、ここで持つ。 */
     val serverSettingsRepository: ServerSettingsRepository by lazy {

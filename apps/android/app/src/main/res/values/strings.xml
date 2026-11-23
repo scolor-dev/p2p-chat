@@ -84,9 +84,34 @@
     <string name="add_contact_error_network">サーバーに接続できませんでした。接続先の設定とネットワークを確かめてください。</string>
     <string name="add_contact_error_storage">連絡先を保存できませんでした。もう一度試してください。</string>
 
+    <string name="qr_scan_open">読み取る</string>
+    <string name="qr_scan_title">QR を読み取る</string>
+    <string name="qr_scan_description">相手の QR コードを枠に映してください</string>
+    <string name="qr_scan_permission_message">QR を読み取るには、カメラの許可が必要です。許可しない場合は、設定画面から端末 ID で連絡先を追加できます。</string>
+    <string name="qr_scan_permission_request">カメラを許可する</string>
+    <string name="qr_scan_permission_settings">アプリの設定を開く</string>
+    <string name="qr_scan_success_added">%1$s を確認済みの連絡先に追加しました</string>
+    <string name="qr_scan_success_updated">%1$s を確認済みにしました</string>
+    <string name="qr_scan_done">完了</string>
+    <string name="qr_scan_error_title">読み取れませんでした</string>
+    <string name="qr_scan_warning_title">警告</string>
+    <string name="qr_scan_error_ok">閉じる</string>
+    <string name="qr_scan_error_not_contact">このアプリの連絡先の QR コードではありません</string>
+    <string name="qr_scan_error_broken">QR コードの内容が壊れています。相手に QR を表示し直してもらってください。</string>
+    <string name="qr_scan_error_self">自分自身の QR コードは登録できません</string>
+    <string name="qr_scan_error_server_not_configured">接続先のサーバーが設定されていません。設定画面で入力してください。</string>
+    <string name="qr_scan_error_not_found">その QR の端末は、サーバーに見つかりませんでした</string>
+    <string name="qr_scan_error_network">サーバーに接続できませんでした。接続先の設定とネットワークを確かめてください。</string>
+    <string name="qr_scan_error_mismatch">サーバーが返した公開鍵が、QR の内容と一致しません。サーバーが鍵を差し替えた可能性があるため、連絡先には保存しませんでした。</string>
+    <string name="qr_scan_error_storage">連絡先を保存できませんでした。もう一度試してください。</string>
     <string name="qr_description">相手にこの QR を読み取ってもらうと、あなたを連絡先に追加できます。</string>
     <string name="qr_image_description">あなたの連絡先の QR コード</string>
     <string name="qr_device_id_label">この端末の ID</string>
     <string name="qr_error_not_registered">端末が登録されていません。先に端末を登録してください。</string>
     <string name="qr_error_failed">QR コードを作れませんでした。もう一度開いてください。</string>
+
+    <string name="chat_input_hint">メッセージを入力してください</string>
+    <string name="chat_send">送信</string>
+    <string name="chat_error_too_long">本文が長すぎます（4096 バイトまで）</string>
+    <string name="chat_error_send_failed">送信できませんでした。接続を確かめてください。</string>
 </resources>

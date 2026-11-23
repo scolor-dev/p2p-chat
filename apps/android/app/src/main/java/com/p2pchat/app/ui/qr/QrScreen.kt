@@ -19,6 +19,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.produceState
@@ -38,20 +39,21 @@ import com.p2pchat.app.ui.theme.P2PChatTheme
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
-/** 自分の連絡先を QR コードで見せる画面（#23）。読み取りは #24。 */
+/** 自分の連絡先を QR コードで見せる画面（#23）。読み取りは [QrScanScreen]（#24）。 */
 @Composable
 fun QrScreen(
     onBack: () -> Unit,
+    onScanClick: () -> Unit,
     viewModel: QrViewModel = viewModel(factory = QrViewModel.Factory),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
-    QrContent(uiState = uiState, onBack = onBack)
+    QrContent(uiState = uiState, onBack = onBack, onScanClick = onScanClick)
 }
 
 /** ViewModel を知らない、表示だけの部分。 */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun QrContent(uiState: QrUiState, onBack: () -> Unit) {
+fun QrContent(uiState: QrUiState, onBack: () -> Unit, onScanClick: () -> Unit) {
     Scaffold(
         topBar = {
             CenterAlignedTopAppBar(
@@ -63,6 +65,9 @@ fun QrContent(uiState: QrUiState, onBack: () -> Unit) {
                             contentDescription = stringResource(R.string.back),
                         )
                     }
+                },
+                actions = {
+                    TextButton(onClick = onScanClick) { Text(stringResource(R.string.qr_scan_open)) }
                 },
             )
         },
@@ -130,6 +135,7 @@ private fun QrContentPreview() {
                 contactUrl = "p2pchat://contact?id=a1b2c3d4e5f60718&fp=ungWv48Bz-pBQUDeXa4iI7ADYaOWF3qctBD_YfIAFa0",
             ),
             onBack = {},
+            onScanClick = {},
         )
     }
 }
