@@ -111,7 +111,7 @@ fun ChatContent(
                 canSend = uiState.canSend,
                 errorResId = when {
                     uiState.isInputTooLong -> R.string.chat_error_too_long
-                    uiState.sendFailed -> R.string.chat_error_send_failed
+                    uiState.sendFailed -> uiState.sendError.messageResId()
                     else -> null
                 },
                 onInputChange = onInputChange,
@@ -123,16 +123,56 @@ fun ChatContent(
         LaunchedEffect(uiState.messages.size) {
             if (uiState.messages.isNotEmpty()) listState.scrollToItem(uiState.messages.lastIndex)
         }
-        LazyColumn(
-            state = listState,
-            modifier = Modifier.fillMaxSize().padding(innerPadding),
-            contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 8.dp, vertical = 16.dp),
-        ) {
-            items(uiState.messages, key = { it.id }) { message ->
-                MessageBubble(message)
+        Column(modifier = Modifier.fillMaxSize().padding(innerPadding)) {
+            ConnectionBand(uiState.connection)
+            LazyColumn(
+                state = listState,
+                modifier = Modifier.fillMaxWidth().weight(1f),
+                contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 8.dp, vertical = 16.dp),
+            ) {
+                items(uiState.messages, key = { it.id }) { message ->
+                    MessageBubble(message)
+                }
             }
         }
     }
+}
+
+/** トップバー下の細い帯。接続の状態を 1 行で控えめに出す。 */
+@Composable
+private fun ConnectionBand(connection: ChatConnection) {
+    val colors = LocalChatColors.current
+    Text(
+        text = stringResource(connection.labelResId()),
+        color = colors.onBar.copy(alpha = 0.8f),
+        style = MaterialTheme.typography.labelSmall,
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(colors.bar.copy(alpha = 0.6f))
+            .padding(horizontal = 20.dp, vertical = 2.dp),
+    )
+}
+
+private fun ChatConnection.labelResId(): Int = when (this) {
+    ChatConnection.Connecting -> R.string.chat_connection_connecting
+    ChatConnection.Connected -> R.string.chat_connection_connected
+    ChatConnection.Disconnected -> R.string.chat_connection_disconnected
+    ChatConnection.PeerOffline -> R.string.chat_connection_peer_offline
+    ChatConnection.Rejected -> R.string.chat_connection_rejected
+    ChatConnection.NoResponse -> R.string.chat_connection_no_response
+    ChatConnection.SignalingUnavailable -> R.string.chat_connection_signaling_unavailable
+    ChatConnection.Failed -> R.string.chat_connection_failed
+}
+
+private fun ChatSendError.messageResId(): Int = when (this) {
+    ChatSendError.Generic -> R.string.chat_error_send_failed
+    ChatSendError.NoPublicKey -> R.string.chat_error_no_public_key
+    ChatSendError.PeerOffline -> R.string.chat_error_peer_offline
+    ChatSendError.Rejected -> R.string.chat_error_rejected
+    ChatSendError.NoResponse -> R.string.chat_error_no_response
+    ChatSendError.SignalingUnavailable -> R.string.chat_error_signaling_unavailable
+    ChatSendError.ConnectionFailed -> R.string.chat_error_connection_failed
+    ChatSendError.Disconnected -> R.string.chat_error_disconnected
 }
 
 @Composable

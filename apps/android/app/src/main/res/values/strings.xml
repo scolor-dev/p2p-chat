@@ -114,4 +114,19 @@
     <string name="chat_send">送信</string>
     <string name="chat_error_too_long">本文が長すぎます（4096 バイトまで）</string>
     <string name="chat_error_send_failed">送信できませんでした。接続を確かめてください。</string>
+    <string name="chat_error_no_public_key">この連絡先の公開鍵を読み込めないため、送信できません。</string>
+    <string name="chat_error_peer_offline">相手がオンラインではありません。</string>
+    <string name="chat_error_rejected">接続を拒否されました。</string>
+    <string name="chat_error_no_response">相手から応答がありません。</string>
+    <string name="chat_error_signaling_unavailable">サーバーに接続できていないため、送信できません。</string>
+    <string name="chat_error_connection_failed">相手と接続できませんでした。</string>
+    <string name="chat_error_disconnected">接続が切れました。もう一度送信してください。</string>
+    <string name="chat_connection_connecting">接続中…</string>
+    <string name="chat_connection_connected">接続済み</string>
+    <string name="chat_connection_disconnected">接続が切れました（送信すると再接続します）</string>
+    <string name="chat_connection_peer_offline">相手がオンラインではありません</string>
+    <string name="chat_connection_rejected">接続を拒否されました</string>
+    <string name="chat_connection_no_response">応答がありません</string>
+    <string name="chat_connection_signaling_unavailable">サーバーに接続していません</string>
+    <string name="chat_connection_failed">接続できませんでした</string>
 </resources>

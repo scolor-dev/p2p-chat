@@ -8,6 +8,11 @@ import com.p2pchat.app.data.message.Message
 import com.p2pchat.app.data.message.MessageDirection
 import com.p2pchat.app.data.message.MessageRepository
 import com.p2pchat.app.data.message.MessageStatus
+import com.p2pchat.app.data.message.ChatSendException
+import com.p2pchat.app.data.peer.FakePeerConnector
+import com.p2pchat.app.data.peer.FakePeerSession
+import com.p2pchat.app.data.peer.PeerFailure
+import com.p2pchat.app.data.peer.PeerState
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
@@ -45,6 +50,10 @@ class ChatViewModelTest {
         override fun observeMessages(deviceId: String): Flow<List<Message>> =
             messages.map { list -> list.filter { it.deviceId == deviceId } }
         override suspend fun upsertMessage(message: Message) { messages.value = messages.value + message }
+        override suspend fun getMessage(id: String): Message? = messages.value.find { it.id == id }
+        override suspend fun updateStatus(id: String, status: MessageStatus) {
+            messages.value = messages.value.map { if (it.id == id) it.copy(status = status) else it }
+        }
     }
 
     private class FakeSender : ChatMessageSender {
@@ -61,7 +70,8 @@ class ChatViewModelTest {
     private val contacts = FakeContactRepository()
     private val messages = FakeMessageRepository()
     private val sender = FakeSender()
-    private val viewModel by lazy { ChatViewModel("a1", contacts, messages, sender) }
+    private val connector = FakePeerConnector()
+    private val viewModel by lazy { ChatViewModel("a1", contacts, messages, sender, connector) }
 
     private fun alice() = Contact("a1", "Alice", "", false, 1L)
 
@@ -198,5 +208,49 @@ class ChatViewModelTest {
         sender.gate!!.complete(Unit)
         assertFalse(viewModel.uiState.value.isSending)
         assertEquals("", viewModel.uiState.value.input)
+    }
+
+    @Test
+    fun 画面を開くと相手に接続し接続済みと表示する() = runTest {
+        observe()
+        assertEquals(listOf("a1"), connector.connectCalls)
+        assertEquals(ChatConnection.Connected, viewModel.uiState.value.connection)
+    }
+
+    @Test
+    fun 接続状態の変化が帯の状態に反映される() = runTest {
+        connector.initialState = PeerState.Connecting
+        observe()
+        assertEquals(ChatConnection.Connecting, viewModel.uiState.value.connection)
+
+        val session = connector.sessions.value.getValue("a1") as FakePeerSession
+        session.state.value = PeerState.Failed(PeerFailure.PeerOffline)
+        assertEquals(ChatConnection.PeerOffline, viewModel.uiState.value.connection)
+        session.state.value = PeerState.Failed(PeerFailure.Rejected)
+        assertEquals(ChatConnection.Rejected, viewModel.uiState.value.connection)
+        session.state.value = PeerState.Failed(PeerFailure.Timeout)
+        assertEquals(ChatConnection.NoResponse, viewModel.uiState.value.connection)
+        session.state.value = PeerState.Failed(PeerFailure.SignalingUnavailable)
+        assertEquals(ChatConnection.SignalingUnavailable, viewModel.uiState.value.connection)
+        session.state.value = PeerState.Disconnected
+        assertEquals(ChatConnection.Disconnected, viewModel.uiState.value.connection)
+    }
+
+    @Test
+    fun 送信失敗の理由ごとに出し分ける() = runTest {
+        observe()
+        val cases = listOf(
+            ChatSendException(ChatSendException.Reason.PEER, PeerFailure.PeerOffline) to ChatSendError.PeerOffline,
+            ChatSendException(ChatSendException.Reason.PEER, PeerFailure.Rejected) to ChatSendError.Rejected,
+            ChatSendException(ChatSendException.Reason.PEER, PeerFailure.Timeout) to ChatSendError.NoResponse,
+            ChatSendException(ChatSendException.Reason.NO_PUBLIC_KEY) to ChatSendError.NoPublicKey,
+            ChatSendException(ChatSendException.Reason.SEND_FAILED) to ChatSendError.Generic,
+        )
+        for ((failure, expected) in cases) {
+            sender.result = Result.failure(failure)
+            viewModel.onInputChange("hello")
+            viewModel.onSendClick()
+            assertEquals(expected, viewModel.uiState.value.sendError)
+        }
     }
 }

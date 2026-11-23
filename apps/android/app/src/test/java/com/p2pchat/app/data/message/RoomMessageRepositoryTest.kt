@@ -26,6 +26,12 @@ class RoomMessageRepositoryTest {
         override suspend fun upsert(message: MessageEntity) {
             rows.value = rows.value + (message.id to message)
         }
+
+        override suspend fun getById(id: String): MessageEntity? = rows.value[id]
+
+        override suspend fun updateStatus(id: String, status: String) {
+            rows.value[id]?.let { rows.value = rows.value + (id to it.copy(status = status)) }
+        }
     }
 
     private fun message(
@@ -46,6 +52,17 @@ class RoomMessageRepositoryTest {
         val result = repository.observeMessages("peer1").first()
 
         assertEquals(listOf("m1", "m2"), result.map { it.id })
+    }
+
+    @Test
+    fun idで取得でき送信状態だけを更新できる() = runTest {
+        val repository = RoomMessageRepository(FakeMessageDao())
+        repository.upsertMessage(message("m1"))
+
+        repository.updateStatus("m1", MessageStatus.SENT)
+
+        assertEquals(MessageStatus.SENT, repository.getMessage("m1")?.status)
+        assertEquals(null, repository.getMessage("none"))
     }
 
     @Test
