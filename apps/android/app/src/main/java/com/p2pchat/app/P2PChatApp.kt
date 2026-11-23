@@ -17,6 +17,8 @@ class P2PChatApp : Application() {
     override fun onCreate() {
         super.onCreate()
         container = AppContainer(this)
+        // 相手からの offer を取りこぼさないように、起動時から受信を始める（libwebrtc は最初の接続まで読み込まない）
+        container.peerConnector.start()
 
         // シグナリングは、アプリが前面にある間だけつなぐ（docs/design.md 5-7。MVP は背面では動かさない）。
         // 画面の回転では止まらないように、Activity ではなくプロセス全体の前面・背面を見る。
