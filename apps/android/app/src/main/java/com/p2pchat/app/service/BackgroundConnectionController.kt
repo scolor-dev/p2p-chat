@@ -13,11 +13,14 @@ import java.util.concurrent.atomic.AtomicBoolean
  * アプリの前面・背面と「バックグラウンドでも通信する」設定から、シグナリングとフォアグラウンドサービスの
  * 開始・停止を決める。Android に依存しない（サービスは [ForegroundServiceLauncher] 越し）。
  *
- * - 前面: シグナリングを動かし、サービスは止める（画面が見えている間は常駐通知が要らない）。
- * - 背面で設定オン: サービスを開始する。開始できたらシグナリングはそのまま保つ。
- *   開始が許されなかった（[ForegroundServiceLauncher.start] が false）ときは、前面のみの動作に落として
- *   シグナリングを止める。
- * - 背面で設定オフ: サービスを止め、シグナリングを止める（従来どおり）。
+ * **サービスは、アプリが前面にいる間に開始する。** Android 12 以降は、背面になってからのフォアグラウンド
+ * サービスの開始が（ほとんどの場合）許されず、例外になるため。前面で開始しておけば、そのまま背面でも動き続ける。
+ *
+ * - 前面で設定オン: シグナリングを動かし、サービスを開始する（すでに動いていれば何も変わらない）。
+ *   開始できなかった（[ForegroundServiceLauncher.start] が false）ときは、前面のみの動作になる。
+ * - 前面で設定オフ: シグナリングを動かし、サービスは止める。
+ * - 背面に回った: サービスが動いていればシグナリングをそのまま保つ。動いていなければシグナリングを止める
+ *   （従来どおり前面のみ）。背面からサービスを開始しようとはしない。
  * - OS がサービスを止めた（[onServiceStopped]）とき、背面ならシグナリングを止める。
  *
  * P2P の接続（PeerConnector）はシグナリングとは別に、プロセスが生きている間は残る。
@@ -31,6 +34,10 @@ class BackgroundConnectionController(
     /** null は、まだ前面・背面のどちらも通知されていない状態。 */
     private val foreground = MutableStateFlow<Boolean?>(null)
     private val started = AtomicBoolean(false)
+
+    /** サービスが動いている（前面で開始できた）か。 */
+    @Volatile
+    private var serviceRunning = false
 
     /** 設定と前面・背面の購読を始める。1 回だけ有効。 */
     fun start() {
@@ -53,23 +60,27 @@ class BackgroundConnectionController(
 
     /** OS の都合（時間制限・開始の拒否など）でサービスが止まった。背面なら前面のみの動作に落とす。 */
     fun onServiceStopped() {
+        serviceRunning = false
         if (foreground.value == false) signaling.stop()
     }
 
     private fun apply(enabled: Boolean, isForeground: Boolean) {
-        when {
-            isForeground -> {
+        if (isForeground) {
+            signaling.start()
+            if (enabled) {
+                // 前面にいる間なら、サービスを開始できる。開始できなければ、背面では前面のみの動作になる
+                serviceRunning = launcher.start()
+            } else {
                 launcher.stop()
-                signaling.start()
+                serviceRunning = false
             }
-            enabled -> {
-                // 開始が許されないことがある（Android 12 以降の背面からの開始の制限など）。そのときは前面のみにする。
-                if (!launcher.start()) signaling.stop()
-            }
-            else -> {
-                launcher.stop()
-                signaling.stop()
-            }
+            return
         }
+        // 背面。設定オフ・サービスが動いていないときは、従来どおりシグナリングを止める
+        if (!enabled) {
+            launcher.stop()
+            serviceRunning = false
+        }
+        if (!enabled || !serviceRunning) signaling.stop()
     }
 }

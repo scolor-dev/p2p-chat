@@ -33,6 +33,11 @@ class InMemoryMessageRepository : MessageRepository {
         list.groupBy { it.deviceId }.values.map { group -> group.maxWith(compareBy({ it.sentAt }, { it.id })) }
     }
 
+    override fun observeLatestReceivedMessages(): Flow<List<Message>> = messages.map { list ->
+        list.filter { it.direction == MessageDirection.RECEIVED }
+            .groupBy { it.deviceId }.values.map { group -> group.maxWith(compareBy({ it.sentAt }, { it.id })) }
+    }
+
     override suspend fun failSendingBefore(olderThan: Long): Int {
         var count = 0
         messages.value = messages.value.map {
@@ -65,4 +70,13 @@ class TestDevice(val deviceId: String) {
 
     /** この端末から見た、[peer] の連絡先。 */
     fun contactOf(peer: TestDevice) = Contact(peer.deviceId, peer.deviceId, peer.publicKeyBase64, false, 1L)
+}
+
+class InMemoryReadStateRepository : ReadStateRepository {
+    val positions = MutableStateFlow<Map<String, Long>>(emptyMap())
+
+    override fun observeReadPositions(): Flow<Map<String, Long>> = positions
+    override suspend fun markRead(deviceId: String, readUpTo: Long) {
+        if (readUpTo > (positions.value[deviceId] ?: Long.MIN_VALUE)) positions.value = positions.value + (deviceId to readUpTo)
+    }
 }

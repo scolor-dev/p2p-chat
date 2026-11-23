@@ -39,7 +39,18 @@ class BackgroundConnectionControllerTest {
     }
 
     @Test
-    fun 前面に来たらシグナリングを始めサービスは止める() = runTest {
+    fun 設定オンで前面に来たらシグナリングを始めサービスを開始する() = runTest {
+        val controller = controller()
+
+        controller.onForeground()
+
+        assertEquals(listOf("start"), signaling.calls)
+        assertEquals(listOf("start"), launcher.calls)
+    }
+
+    @Test
+    fun 設定オフで前面に来たらシグナリングを始めサービスは止める() = runTest {
+        prefs.backgroundCommsEnabled.value = false
         val controller = controller()
 
         controller.onForeground()
@@ -57,19 +68,19 @@ class BackgroundConnectionControllerTest {
     }
 
     @Test
-    fun 設定オンで背面に回ったらサービスを開始しシグナリングは止めない() = runTest {
+    fun サービスが動いていれば背面に回ってもシグナリングを止めずサービスも触らない() = runTest {
         val controller = controller()
         controller.onForeground()
         clear()
 
         controller.onBackground()
 
-        assertEquals(listOf("start"), launcher.calls)
         assertEquals(emptyList<String>(), signaling.calls)
+        assertEquals(emptyList<String>(), launcher.calls)
     }
 
     @Test
-    fun 設定オフで背面に回ったらシグナリングを止めサービスは開始しない() = runTest {
+    fun 設定オフで背面に回ったらシグナリングを止める() = runTest {
         prefs.backgroundCommsEnabled.value = false
         val controller = controller()
         controller.onForeground()
@@ -78,11 +89,10 @@ class BackgroundConnectionControllerTest {
         controller.onBackground()
 
         assertEquals(listOf("stop"), signaling.calls)
-        assertEquals(listOf("stop"), launcher.calls)
     }
 
     @Test
-    fun サービスの開始が許されなければ前面のみの動作に落としてシグナリングを止める() = runTest {
+    fun 前面でサービスの開始が許されなければ背面でシグナリングを止める() = runTest {
         launcher.startResult = false
         val controller = controller()
         controller.onForeground()
@@ -90,8 +100,20 @@ class BackgroundConnectionControllerTest {
 
         controller.onBackground()
 
-        assertEquals(listOf("start"), launcher.calls)
         assertEquals(listOf("stop"), signaling.calls)
+    }
+
+    @Test
+    fun 背面からはサービスを開始しようとしない() = runTest {
+        launcher.startResult = false
+        val controller = controller()
+        controller.onForeground()
+        controller.onBackground()
+        clear()
+
+        prefs.backgroundCommsEnabled.value = true
+
+        assertEquals(emptyList<String>(), launcher.calls.filter { it == "start" })
     }
 
     @Test
@@ -108,11 +130,10 @@ class BackgroundConnectionControllerTest {
     }
 
     @Test
-    fun 背面でオンにするとサービスを開始する() = runTest {
+    fun 前面で設定をオンにするとサービスを開始する() = runTest {
         prefs.backgroundCommsEnabled.value = false
         val controller = controller()
         controller.onForeground()
-        controller.onBackground()
         clear()
 
         prefs.backgroundCommsEnabled.value = true
@@ -121,7 +142,7 @@ class BackgroundConnectionControllerTest {
     }
 
     @Test
-    fun 前面でオンオフを切り替えてもシグナリングは止まらない() = runTest {
+    fun 前面で設定をオフにしてもシグナリングは止まらない() = runTest {
         val controller = controller()
         controller.onForeground()
         clear()
@@ -129,6 +150,7 @@ class BackgroundConnectionControllerTest {
         prefs.backgroundCommsEnabled.value = false
 
         assertEquals(emptyList<String>(), signaling.calls.filter { it == "stop" })
+        assertEquals(listOf("stop"), launcher.calls)
     }
 
     @Test
@@ -155,15 +177,16 @@ class BackgroundConnectionControllerTest {
     }
 
     @Test
-    fun 背面から前面に戻るとシグナリングを始めサービスを止める() = runTest {
+    fun 背面から前面に戻るとシグナリングを始めサービスを開始し直す() = runTest {
         val controller = controller()
         controller.onForeground()
         controller.onBackground()
+        controller.onServiceStopped()
         clear()
 
         controller.onForeground()
 
         assertEquals(listOf("start"), signaling.calls)
-        assertEquals(listOf("stop"), launcher.calls)
+        assertEquals(listOf("start"), launcher.calls)
     }
 }

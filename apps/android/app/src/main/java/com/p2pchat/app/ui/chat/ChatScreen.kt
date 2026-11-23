@@ -49,6 +49,7 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.LifecycleStartEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.p2pchat.app.R
@@ -65,6 +66,11 @@ fun ChatScreen(
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     RequestNotificationPermissionOnFirstChat()
+    // 前面にある間だけ、届いたメッセージを既読にする
+    LifecycleStartEffect(viewModel) {
+        viewModel.onVisibleChanged(true)
+        onStopOrDispose { viewModel.onVisibleChanged(false) }
+    }
     ChatContent(
         uiState = uiState,
         onBack = onBack,

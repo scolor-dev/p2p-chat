@@ -20,6 +20,8 @@ import com.p2pchat.app.data.message.OutgoingMessageTracker
 import com.p2pchat.app.data.message.P2PChatMessageSender
 import com.p2pchat.app.data.message.MessageRepository
 import com.p2pchat.app.data.message.RoomMessageRepository
+import com.p2pchat.app.data.message.ReadStateRepository
+import com.p2pchat.app.data.message.RoomReadStateRepository
 import com.p2pchat.app.data.device.DataStoreDeviceIdentityStore
 import com.p2pchat.app.data.device.DefaultDeviceRepository
 import com.p2pchat.app.data.device.DeviceIdentityStore
@@ -72,6 +74,9 @@ class AppContainer(context: Context) {
 
     /** Room DB を使用するメッセージリポジトリ。#26 が使う。 */
     val messageRepository: MessageRepository by lazy { RoomMessageRepository(database.messageDao()) }
+
+    /** 相手ごとの既読位置（未読ドットとチャットの既読化）。Room。 */
+    val readStateRepository: ReadStateRepository by lazy { RoomReadStateRepository(database.readStateDao()) }
 
     /** 送信したメッセージの状態の更新口（送信開始・ack・失敗）。#28 がタイムアウトと再送を足す。 */
     val outgoingMessageTracker: OutgoingMessageTracker by lazy { DefaultOutgoingMessageTracker(messageRepository, appScope) }

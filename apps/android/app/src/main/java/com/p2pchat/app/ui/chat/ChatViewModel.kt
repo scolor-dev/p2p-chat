@@ -12,6 +12,8 @@ import com.p2pchat.app.data.message.ChatSendException
 import com.p2pchat.app.data.message.MessageDirection
 import com.p2pchat.app.data.message.MessageRepository
 import com.p2pchat.app.data.message.MessageStatus
+import com.p2pchat.app.data.message.NoOpReadStateRepository
+import com.p2pchat.app.data.message.ReadStateRepository
 import com.p2pchat.app.data.peer.ConnectOncePeerReconnector
 import com.p2pchat.app.data.peer.PeerConnector
 import com.p2pchat.app.data.peer.PeerFailure
@@ -29,6 +31,7 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.flow.filter
+import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
@@ -53,7 +56,12 @@ class ChatViewModel(
     private val reconnector: PeerReconnector = ConnectOncePeerReconnector(peerConnector),
     /** この相手のチャットを開いている間は、その相手のメッセージを通知しないために、開いた・閉じたを伝える。 */
     private val activeChatTracker: ActiveChatTracker = ActiveChatTracker.None,
+    /** 画面を開いている間、この相手のメッセージを既読にする。 */
+    readStateRepository: ReadStateRepository = NoOpReadStateRepository,
 ) : ViewModel() {
+
+    /** チャット画面が見えている（前面にある）間だけ true。閉じたあと・背面に届いたものは未読のままにする。 */
+    private val visible = MutableStateFlow(false)
 
     private data class InputState(
         val text: String = "",
@@ -91,6 +99,14 @@ class ChatViewModel(
     }
 
     init {
+        // 見えている間は、届いたメッセージを（開いた時点の分も含めて）既読にする。
+        viewModelScope.launch {
+            combine(visible, messageRepository.observeMessages(deviceId)) { v, messages ->
+                if (v) messages.maxOfOrNull { it.sentAt } else null
+            }
+                .filterNotNull()
+                .collect { readStateRepository.markRead(deviceId, it) }
+        }
         // 画面を開いたら接続し、閉じる（ViewModel が破棄される）まで、切れたらつなぎ直す。
         viewModelScope.launch { reconnector.keepConnected(deviceId) }
         viewModelScope.launch {
@@ -145,6 +161,11 @@ class ChatViewModel(
             started = SharingStarted.WhileSubscribed(5_000),
             initialValue = ChatUiState(),
         )
+
+    /** 画面が見えているか（前面か）が変わったとき。見えている間のメッセージを既読にする。 */
+    fun onVisibleChanged(isVisible: Boolean) {
+        visible.value = isVisible
+    }
 
     fun onInputChange(text: String) {
         inputState.update { it.copy(text = text, sendFailed = false) }
@@ -255,6 +276,7 @@ class ChatViewModel(
                     decryptFailures = app.container.incomingMessageHandler.decryptFailures,
                     reconnector = app.container.peerReconnector,
                     activeChatTracker = app.container.activeChatTracker,
+                    readStateRepository = app.container.readStateRepository,
                 )
             }
         }

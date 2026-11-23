@@ -29,7 +29,7 @@ class BackgroundConnectionService : Service() {
             // 開始が許されない・権限の不足など。前面のみの動作に落とす。
             giveUp()
         }
-        // OS に止められたあとに勝手に再開しない（再開は、前面→背面の切り替えで行う）
+        // OS に止められたあとに勝手に再開しない（再開は、次に前面に戻ったときに行う）
         return START_NOT_STICKY
     }
 
