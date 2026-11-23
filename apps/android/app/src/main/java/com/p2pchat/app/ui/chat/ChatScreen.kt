@@ -1,6 +1,7 @@
 package com.p2pchat.app.ui.chat
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -67,6 +68,7 @@ fun ChatScreen(
         onBack = onBack,
         onInputChange = viewModel::onInputChange,
         onSendClick = viewModel::onSendClick,
+        onResendClick = viewModel::onResendClick,
     )
 }
 
@@ -78,6 +80,7 @@ fun ChatContent(
     onBack: () -> Unit,
     onInputChange: (String) -> Unit,
     onSendClick: () -> Unit,
+    onResendClick: (messageId: String) -> Unit = {},
 ) {
     val colors = LocalChatColors.current
     Scaffold(
@@ -125,13 +128,14 @@ fun ChatContent(
         }
         Column(modifier = Modifier.fillMaxSize().padding(innerPadding)) {
             ConnectionBand(uiState.connection)
+            if (uiState.decryptWarning) DecryptWarningBand()
             LazyColumn(
                 state = listState,
                 modifier = Modifier.fillMaxWidth().weight(1f),
                 contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 8.dp, vertical = 16.dp),
             ) {
                 items(uiState.messages, key = { it.id }) { message ->
-                    MessageBubble(message)
+                    MessageBubble(message, onResendClick)
                 }
             }
         }
@@ -150,6 +154,21 @@ private fun ConnectionBand(connection: ChatConnection) {
             .fillMaxWidth()
             .background(colors.bar.copy(alpha = 0.6f))
             .padding(horizontal = 20.dp, vertical = 2.dp),
+    )
+}
+
+/** 復号できないメッセージを捨てた直後に、数秒だけ出す 1 行。原因は断定しない。 */
+@Composable
+private fun DecryptWarningBand() {
+    val colors = LocalChatColors.current
+    Text(
+        text = stringResource(R.string.chat_warning_decrypt_failed),
+        color = colors.onWarning,
+        style = MaterialTheme.typography.labelMedium,
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(colors.warning)
+            .padding(horizontal = 20.dp, vertical = 4.dp),
     )
 }
 
@@ -176,14 +195,19 @@ private fun ChatSendError.messageResId(): Int = when (this) {
 }
 
 @Composable
-private fun MessageBubble(message: ChatMessageUiModel) {
+private fun MessageBubble(message: ChatMessageUiModel, onResendClick: (String) -> Unit) {
     val colors = LocalChatColors.current
-    Row(
+    val failed = message.isSent && message.sendStatus == ChatSendStatus.Failed
+    val resendLabel = stringResource(R.string.chat_resend_action)
+    Column(
         modifier = Modifier
             .fillMaxWidth()
             // 同じ人が続く間は詰め、しっぽのあとは広めに空ける。
-            .padding(bottom = if (message.showTail) 20.dp else 6.dp),
-        horizontalArrangement = if (message.isSent) Arrangement.End else Arrangement.Start,
+            .padding(bottom = if (message.showTail) 20.dp else 6.dp)
+            .then(
+                if (failed) Modifier.clickable(onClickLabel = resendLabel) { onResendClick(message.id) } else Modifier,
+            ),
+        horizontalAlignment = if (message.isSent) Alignment.End else Alignment.Start,
     ) {
         Text(
             text = message.body,
@@ -196,6 +220,16 @@ private fun MessageBubble(message: ChatMessageUiModel) {
                 )
                 .padding(horizontal = 12.dp, vertical = 8.dp),
         )
+        // 送信済みは何も出さない。送信中と失敗だけ、吹き出しの下に小さく添える（しっぽの下に回り込まない余白を取る）。
+        if (message.isSent && message.sendStatus != ChatSendStatus.Sent) {
+            val isFailed = message.sendStatus == ChatSendStatus.Failed
+            Text(
+                text = stringResource(if (isFailed) R.string.chat_send_status_failed else R.string.chat_send_status_sending),
+                color = if (isFailed) colors.sendFailed else colors.sendStatus,
+                style = MaterialTheme.typography.labelSmall,
+                modifier = Modifier.padding(top = if (message.showTail) 10.dp else 2.dp, end = 4.dp),
+            )
+        }
     }
 }
 
@@ -328,6 +362,17 @@ private fun ChatConsecutivePreview() {
 @Composable
 private fun ChatDarkPreview() {
     P2PChatTheme(darkTheme = true) {
-        ChatContent(ChatUiState(contactName = "連絡先", messages = previewMessages, sendFailed = true), {}, {}, {})
+        ChatContent(
+            ChatUiState(
+                contactName = "連絡先",
+                messages = previewMessages + listOf(
+                    ChatMessageUiModel("5", "送信中のメッセージ", isSent = true, showTail = false, sendStatus = ChatSendStatus.Sending),
+                    ChatMessageUiModel("6", "送れなかったメッセージ", isSent = true, showTail = true, sendStatus = ChatSendStatus.Failed),
+                ),
+                sendFailed = true,
+                decryptWarning = true,
+            ),
+            {}, {}, {},
+        )
     }
 }

@@ -61,11 +61,11 @@ class AppContainer(context: Context) {
     val messageRepository: MessageRepository by lazy { RoomMessageRepository(database.messageDao()) }
 
     /** 送信したメッセージの状態の更新口（送信開始・ack・失敗）。#28 がタイムアウトと再送を足す。 */
-    val outgoingMessageTracker: OutgoingMessageTracker by lazy { DefaultOutgoingMessageTracker(messageRepository) }
+    val outgoingMessageTracker: OutgoingMessageTracker by lazy { DefaultOutgoingMessageTracker(messageRepository, appScope) }
 
     /** チャット画面の送信処理。P2P で暗号化して送る。 */
     val chatMessageSender: ChatMessageSender by lazy {
-        P2PChatMessageSender(contactRepository, peerConnector, messageCipher, outgoingMessageTracker)
+        P2PChatMessageSender(contactRepository, peerConnector, messageCipher, outgoingMessageTracker, messageRepository)
     }
 
     /** 全ての PeerSession からの受信（msg / ack）を処理する。[P2PChatApp] が起動時に start() する。 */
@@ -102,7 +102,7 @@ class AppContainer(context: Context) {
     }
 
     /** アプリが動いている間ずっと続く処理（シグナリングの接続、ネットワークの見張り）の置き場所。 */
-    private val appScope = CoroutineScope(SupervisorJob())
+    val appScope = CoroutineScope(SupervisorJob())
 
     private val networkMonitor: NetworkMonitor by lazy { ConnectivityNetworkMonitor(context, appScope) }
 

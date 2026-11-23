@@ -20,6 +20,8 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
+import kotlinx.coroutines.test.advanceTimeBy
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -54,6 +56,8 @@ class ChatViewModelTest {
         override suspend fun updateStatus(id: String, status: MessageStatus) {
             messages.value = messages.value.map { if (it.id == id) it.copy(status = status) else it }
         }
+        override fun observeLatestMessages(): Flow<List<Message>> = messages
+        override suspend fun failSendingBefore(olderThan: Long): Int = 0
     }
 
     private class FakeSender : ChatMessageSender {
@@ -65,13 +69,23 @@ class ChatViewModelTest {
             gate?.await()
             return result
         }
+
+        val resent = mutableListOf<Pair<String, String>>()
+        var resendResult: Result<Unit> = Result.success(Unit)
+        var resendGate: CompletableDeferred<Unit>? = null
+        override suspend fun resend(deviceId: String, id: String): Result<Unit> {
+            resent += deviceId to id
+            resendGate?.await()
+            return resendResult
+        }
     }
 
     private val contacts = FakeContactRepository()
     private val messages = FakeMessageRepository()
     private val sender = FakeSender()
     private val connector = FakePeerConnector()
-    private val viewModel by lazy { ChatViewModel("a1", contacts, messages, sender, connector) }
+    private val decryptFailures = kotlinx.coroutines.flow.MutableSharedFlow<String>(extraBufferCapacity = 8)
+    private val viewModel by lazy { ChatViewModel("a1", contacts, messages, sender, connector, decryptFailures) }
 
     private fun alice() = Contact("a1", "Alice", "", false, 1L)
 
@@ -252,5 +266,86 @@ class ChatViewModelTest {
             viewModel.onSendClick()
             assertEquals(expected, viewModel.uiState.value.sendError)
         }
+    }
+
+    private fun sentMsg(id: String, status: MessageStatus, at: Long) =
+        Message(id, "a1", MessageDirection.SENT, "body-$id", status, at)
+
+    @Test
+    fun 送信状態が吹き出しの状態に反映される() = runTest {
+        observe()
+        messages.messages.value = listOf(
+            sentMsg("1", MessageStatus.SENT, 1),
+            sentMsg("2", MessageStatus.SENDING, 2),
+            sentMsg("3", MessageStatus.FAILED, 3),
+        )
+
+        val list = viewModel.uiState.value.messages
+        assertEquals(listOf(ChatSendStatus.Sent, ChatSendStatus.Sending, ChatSendStatus.Failed), list.map { it.sendStatus })
+    }
+
+    @Test
+    fun 送信失敗のメッセージをタップすると同じidで再送し再送中は送信中に見える() = runTest {
+        observe()
+        messages.messages.value = listOf(sentMsg("3", MessageStatus.FAILED, 3))
+        val gate = CompletableDeferred<Unit>()
+        sender.resendGate = gate
+
+        viewModel.onResendClick("3")
+
+        assertEquals(listOf("a1" to "3"), sender.resent)
+        assertEquals(ChatSendStatus.Sending, viewModel.uiState.value.messages.single().sendStatus)
+        viewModel.onResendClick("3") // 再送中は二重に送らない
+        assertEquals(1, sender.resent.size)
+
+        gate.complete(Unit)
+        // DB はまだ FAILED のまま（Fake の sender は状態を動かさない）なので、完了すると失敗の表示に戻る
+        assertEquals(ChatSendStatus.Failed, viewModel.uiState.value.messages.single().sendStatus)
+        assertFalse(viewModel.uiState.value.sendFailed)
+    }
+
+    @Test
+    fun 再送に失敗すると理由を出す() = runTest {
+        observe()
+        messages.messages.value = listOf(sentMsg("3", MessageStatus.FAILED, 3))
+        sender.resendResult = Result.failure(ChatSendException(ChatSendException.Reason.PEER, PeerFailure.PeerOffline))
+
+        viewModel.onResendClick("3")
+
+        val state = viewModel.uiState.value
+        assertTrue(state.sendFailed)
+        assertEquals(ChatSendError.PeerOffline, state.sendError)
+    }
+
+    @Test
+    fun 送信中_送信済み_受信メッセージはタップしても再送しない() = runTest {
+        observe()
+        messages.messages.value = listOf(
+            sentMsg("1", MessageStatus.SENT, 1),
+            sentMsg("2", MessageStatus.SENDING, 2),
+            msg("3", MessageDirection.RECEIVED, 3),
+        )
+
+        listOf("1", "2", "3", "unknown").forEach { viewModel.onResendClick(it) }
+
+        assertTrue(sender.resent.isEmpty())
+    }
+
+    @Test
+    fun 復号失敗の警告は自分の相手の分だけ出て数秒で消える() = runTest {
+        observe()
+        assertFalse(viewModel.uiState.value.decryptWarning)
+
+        decryptFailures.emit("other")
+        assertFalse(viewModel.uiState.value.decryptWarning)
+
+        decryptFailures.emit("a1")
+        assertTrue(viewModel.uiState.value.decryptWarning)
+
+        advanceTimeBy(ChatViewModel.DECRYPT_WARNING_MILLIS - 1)
+        assertTrue(viewModel.uiState.value.decryptWarning)
+        advanceTimeBy(1)
+        runCurrent()
+        assertFalse(viewModel.uiState.value.decryptWarning)
     }
 }

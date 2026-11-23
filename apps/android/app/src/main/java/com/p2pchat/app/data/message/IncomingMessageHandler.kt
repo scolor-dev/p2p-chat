@@ -12,6 +12,10 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.channels.BufferOverflow
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.buffer
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -23,6 +27,8 @@ import java.util.concurrent.atomic.AtomicBoolean
  *
  * - `msg`: 復号 → [MessageRepository.upsertMessage]（RECEIVED / SENT）→ `ack`。同じ `id` が再び届いたら保存せず `ack` だけ返す。
  * - `ack`: [OutgoingMessageTracker.onAckReceived]。
+ * - 復号できない `msg`（鍵の不一致・改ざん・壊れた nonce / ct）は、捨てたうえで [decryptFailures] に相手の端末 ID を流す
+ *   （画面の警告用。内容は流さない）。
  * - 復号できない `msg`・壊れた JSON・知らない type・16 KiB 超のフレーム・連絡先にいない相手・4096 バイト超の本文は、
  *   保存も `ack` もせず捨てる（クラッシュしない）。
  */
@@ -37,6 +43,11 @@ class IncomingMessageHandler(
     private val clock: () -> Long = System::currentTimeMillis,
 ) {
     private val started = AtomicBoolean(false)
+
+    private val _decryptFailures = MutableSharedFlow<String>(extraBufferCapacity = 16, onBufferOverflow = BufferOverflow.DROP_OLDEST)
+
+    /** 復号に失敗して捨てた `msg` の送り主（相手の端末 ID）。購読していない間のものは捨てる。 */
+    val decryptFailures: SharedFlow<String> = _decryptFailures.asSharedFlow()
 
     /** 1 回だけ有効。2 回目以降は何もしない。 */
     fun start() {
@@ -92,8 +103,10 @@ class IncomingMessageHandler(
             if (plain.size > MAX_BODY_BYTES) return
             sanitizeBody(String(plain, Charsets.UTF_8))
         } catch (e: MessageCryptoException) {
+            _decryptFailures.tryEmit(deviceId)
             return
         } catch (e: IllegalArgumentException) {
+            _decryptFailures.tryEmit(deviceId)
             return
         }
         if (body.isBlank()) return

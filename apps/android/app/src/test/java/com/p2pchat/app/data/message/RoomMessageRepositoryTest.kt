@@ -32,6 +32,16 @@ class RoomMessageRepositoryTest {
         override suspend fun updateStatus(id: String, status: String) {
             rows.value[id]?.let { rows.value = rows.value + (id to it.copy(status = status)) }
         }
+
+        override fun observeLatestMessages(): Flow<List<MessageEntity>> = rows.map { map ->
+            map.values.groupBy { it.deviceId }.values.map { g -> g.maxWith(compareBy({ it.sentAt }, { it.id })) }
+        }
+
+        override suspend fun failSendingBefore(olderThan: Long): Int {
+            val targets = rows.value.values.filter { it.status == "SENDING" && it.direction == "SENT" && it.sentAt < olderThan }
+            targets.forEach { rows.value = rows.value + (it.id to it.copy(status = "FAILED")) }
+            return targets.size
+        }
     }
 
     private fun message(
