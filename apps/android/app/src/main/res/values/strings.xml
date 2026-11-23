@@ -129,4 +129,10 @@
     <string name="chat_connection_no_response">応答がありません</string>
     <string name="chat_connection_signaling_unavailable">サーバーに接続していません</string>
     <string name="chat_connection_failed">接続できませんでした</string>
+
+    <string name="connection_request_title">接続の申請</string>
+    <string name="connection_request_message">%1$s さんから接続の申請があります。許可すると、連絡先（未確認）に追加されます。</string>
+    <string name="connection_request_remaining">あと %1$d 秒</string>
+    <string name="connection_request_allow">許可</string>
+    <string name="connection_request_deny">拒否</string>
 </resources>

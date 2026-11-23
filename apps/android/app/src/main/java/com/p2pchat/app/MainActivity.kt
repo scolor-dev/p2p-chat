@@ -5,6 +5,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import com.p2pchat.app.ui.navigation.AppNavGraph
+import com.p2pchat.app.ui.request.ConnectionRequestHost
 import com.p2pchat.app.ui.theme.P2PChatTheme
 
 class MainActivity : ComponentActivity() {
@@ -14,6 +15,8 @@ class MainActivity : ComponentActivity() {
         setContent {
             P2PChatTheme {
                 AppNavGraph()
+                // どの画面にいても出す
+                ConnectionRequestHost()
             }
         }
     }
