@@ -156,6 +156,7 @@ private fun ConnectionBand(connection: ChatConnection) {
 private fun ChatConnection.labelResId(): Int = when (this) {
     ChatConnection.Connecting -> R.string.chat_connection_connecting
     ChatConnection.Connected -> R.string.chat_connection_connected
+    ChatConnection.Reconnecting -> R.string.chat_connection_reconnecting
     ChatConnection.Disconnected -> R.string.chat_connection_disconnected
     ChatConnection.PeerOffline -> R.string.chat_connection_peer_offline
     ChatConnection.Rejected -> R.string.chat_connection_rejected

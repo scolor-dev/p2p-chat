@@ -30,6 +30,7 @@ class DefaultPeerConnector(
     private val scope: CoroutineScope,
     private val unknownOfferHandler: UnknownOfferHandler = UnknownOfferHandler.Ignore,
     private val timeoutMillis: Long = CONNECT_TIMEOUT_MILLIS,
+    private val iceDisconnectedGraceMillis: Long = ICE_DISCONNECTED_GRACE_MILLIS,
 ) : PeerConnector {
     private val _sessions = MutableStateFlow<Map<String, PeerSession>>(emptyMap())
     private val _accepted = MutableSharedFlow<PeerSession>(extraBufferCapacity = 16)
@@ -74,6 +75,7 @@ class DefaultPeerConnector(
             factory = factory,
             scope = scope,
             timeoutMillis = timeoutMillis,
+            iceDisconnectedGraceMillis = iceDisconnectedGraceMillis,
             remoteOffer = offer,
             initialRemoteCandidates = candidates,
         )

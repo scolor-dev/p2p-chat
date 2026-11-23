@@ -29,7 +29,9 @@ import com.p2pchat.app.data.network.OkHttpApiClient
 import com.p2pchat.app.data.network.OkHttpWebSocketClient
 import com.p2pchat.app.data.network.WebSocketClient
 import com.p2pchat.app.data.peer.DefaultPeerConnector
+import com.p2pchat.app.data.peer.DefaultPeerReconnector
 import com.p2pchat.app.data.peer.PeerConnector
+import com.p2pchat.app.data.peer.PeerReconnector
 import com.p2pchat.app.data.peer.WebRtcPeerConnectionFactory
 import com.p2pchat.app.data.settings.DataStoreServerSettingsRepository
 import com.p2pchat.app.data.settings.ServerSettingsRepository
@@ -125,6 +127,11 @@ class AppContainer(context: Context) {
             factory = WebRtcPeerConnectionFactory(context),
             scope = appScope,
         )
+    }
+
+    /** チャット画面を開いている間、相手との P2P 接続を保つ（#29）。 */
+    val peerReconnector: PeerReconnector by lazy {
+        DefaultPeerReconnector(peerConnector, signalingClient, networkMonitor)
     }
 
     /** この端末の鍵ペア（Keystore の P-256）。秘密鍵への参照は [messageCipher] が使う。 */

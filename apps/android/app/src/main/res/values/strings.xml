@@ -123,6 +123,7 @@
     <string name="chat_error_disconnected">接続が切れました。もう一度送信してください。</string>
     <string name="chat_connection_connecting">接続中…</string>
     <string name="chat_connection_connected">接続済み</string>
+    <string name="chat_connection_reconnecting">再接続中…</string>
     <string name="chat_connection_disconnected">接続が切れました（送信すると再接続します）</string>
     <string name="chat_connection_peer_offline">相手がオンラインではありません</string>
     <string name="chat_connection_rejected">接続を拒否されました</string>

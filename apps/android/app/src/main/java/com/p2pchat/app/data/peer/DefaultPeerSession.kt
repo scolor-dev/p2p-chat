@@ -35,6 +35,7 @@ internal class DefaultPeerSession(
     private val factory: RtcPeerConnectionFactory,
     private val scope: CoroutineScope,
     private val timeoutMillis: Long,
+    private val iceDisconnectedGraceMillis: Long = ICE_DISCONNECTED_GRACE_MILLIS,
     /** null なら話しかける側（offer を送る）。非 null なら受ける側で、この offer に answer を返す。 */
     private val remoteOffer: IncomingSignal.Offer? = null,
     initialRemoteCandidates: List<CandidatePayload> = emptyList(),
@@ -49,6 +50,7 @@ internal class DefaultPeerSession(
         data class ChannelClosed(val generation: Int) : Event
         data class Message(val generation: Int, val text: String) : Event
         data object Timeout : Event
+        data class IceGraceExpired(val generation: Int) : Event
         data object Close : Event
     }
 
@@ -73,6 +75,8 @@ internal class DefaultPeerSession(
         private set
 
     private var timeoutJob: Job? = null
+    private var iceGraceJob: Job? = null
+    private var iceDisconnected = false
     private val loopJob: Job = scope.launch(start = CoroutineStart.LAZY) { run() }
 
     /** 処理を始める。作った直後に 1 回だけ呼ぶ。 */
@@ -125,6 +129,7 @@ internal class DefaultPeerSession(
         } finally {
             setState(PeerState.Disconnected) // 外から止められたときの保険（終わっていれば変わらない）
             timeoutJob?.cancel()
+            iceGraceJob?.cancel()
             events.close()
             pc?.close()
         }
@@ -142,6 +147,8 @@ internal class DefaultPeerSession(
             }
             is Event.ChannelClosed -> if (event.generation == generation) disconnected()
             is Event.Message -> if (event.generation == generation) _incoming.tryEmit(event.text)
+            is Event.IceGraceExpired ->
+                if (event.generation == generation && iceDisconnected) disconnected()
             Event.Timeout -> if (state.value == PeerState.Connecting) setState(PeerState.Failed(PeerFailure.Timeout))
             Event.Close -> setState(PeerState.Disconnected)
         }
@@ -224,9 +231,30 @@ internal class DefaultPeerSession(
 
     private fun handleRtcState(rtc: RtcConnectionState) {
         when (rtc) {
-            RtcConnectionState.Failed, RtcConnectionState.Closed -> disconnected()
-            RtcConnectionState.Connected, RtcConnectionState.Other -> Unit
+            RtcConnectionState.Disconnected -> {
+                // 一時的な不通かもしれないので、少し待って戻らなければ切断とみなす（ICE restart はせず、作り直す）
+                if (!iceDisconnected) {
+                    iceDisconnected = true
+                    val gen = generation
+                    iceGraceJob?.cancel()
+                    iceGraceJob = scope.launch {
+                        delay(iceDisconnectedGraceMillis)
+                        events.trySend(Event.IceGraceExpired(gen))
+                    }
+                }
+            }
+            RtcConnectionState.Connected -> clearIceDisconnected()
+            RtcConnectionState.Failed, RtcConnectionState.Closed -> {
+                clearIceDisconnected()
+                disconnected()
+            }
+            RtcConnectionState.Other -> Unit
         }
+    }
+
+    private fun clearIceDisconnected() {
+        iceDisconnected = false
+        iceGraceJob?.cancel()
     }
 
     /** open だった接続なら切断、そうでなければ失敗。 */
