@@ -151,7 +151,16 @@ class ChatViewModel(
                     // 送っている間に打ち足していたら、その文字は消さない。
                     state.copy(text = if (state.text == body) "" else state.text, isSending = false)
                 } else {
-                    state.copy(isSending = false, sendFailed = true, sendError = result.exceptionOrNull().toSendError())
+                    val error = result.exceptionOrNull()
+                    // 接続や送信の失敗では、メッセージは「送信失敗」として履歴に残っている（タップで再送できる）ので入力欄は空にする。
+                    // 入力の検証エラー（空・長すぎ・公開鍵なし）は保存されないので、入力を残す。
+                    val kept = error is ChatSendException && error.reason.keepsMessage()
+                    state.copy(
+                        text = if (kept && state.text == body) "" else state.text,
+                        isSending = false,
+                        sendFailed = true,
+                        sendError = error.toSendError(),
+                    )
                 }
             }
         }
@@ -187,6 +196,14 @@ class ChatViewModel(
             PeerFailure.SignalingUnavailable -> ChatConnection.SignalingUnavailable
             PeerFailure.ConnectionFailed -> ChatConnection.Failed
         }
+    }
+
+    private fun ChatSendException.Reason.keepsMessage(): Boolean = when (this) {
+        ChatSendException.Reason.EMPTY_BODY,
+        ChatSendException.Reason.TOO_LONG,
+        ChatSendException.Reason.NO_PUBLIC_KEY,
+        -> false
+        else -> true
     }
 
     private fun Throwable?.toSendError(): ChatSendError {

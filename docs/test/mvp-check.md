@@ -20,7 +20,7 @@
 | 3c | 申請に 60 秒応答しない | 必要（実時間） | `DefaultConnectionRequestManagerTest` | 「申請に 60 秒応答しないと A は Timeout…」（仮想時間） | 未実施 |
 | 4 | もう一度話しかけて B が許可すると、A が「未確認」で B の連絡先に追加され、テキストが双方向に届く | 必要（実 WebRTC） | `DefaultConnectionRequestManagerTest` / `P2PChatMessageSenderTest` / `IncomingMessageHandlerTest` | 「申請を許可すると未確認の連絡先に追加されチャットできる」。拒否 → 再度話しかける → 許可、`isVerified=false`・公開鍵の保存、A→B と B→A の復号・保存・ack まで通し | 未実施 |
 | 5a | 送ったメッセージが「送信済み」になる | 必要（実 DataChannel） | `DefaultOutgoingMessageTrackerTest` / `P2PChatMessageSenderTest` | 「連絡先にいる相手に送ると B に保存され ack で A が送信済みになる」、「B から A へも送れる」。本文が通信路に平文で流れないことも確認 | 未実施 |
-| 5b | B の Wi-Fi を切った状態で送ると「送信失敗」になる | 必要（実回線の切断）。**ただし下記の不具合あり** | `P2PChatMessageSenderTest` / `ChatViewModelTest` | 「ack が来ないと 10 秒で送信失敗…」は通る（接続はあるが ack が来ない場合）。**相手が WebSocket にいない場合は、送信失敗のメッセージが履歴に残らない**（`@Ignore` の再現テスト「相手がオフラインで送ると…」） | 未実施 |
+| 5b | B の Wi-Fi を切った状態で送ると「送信失敗」になる | 必要（実回線の切断） | `P2PChatMessageSenderTest` / `ChatViewModelTest` | 「ack が来ないと 10 秒で送信失敗…」は通る（接続はあるが ack が来ない場合）。相手が WebSocket にいない場合も、送信失敗のメッセージが履歴に残り、つながった後に再送できる（#58 で修正。「相手がオフラインで送ると 送信失敗のメッセージが残り…」） | 未実施 |
 | 5c | つながった後に再送すると「送信済み」になる（B 側に重複して表示されない） | 必要（実回線） | `ResendTest` / `IncomingMessageHandlerTest` | 「ack が来ないと 10 秒で送信失敗になり、手動再送で送信済みになる 相手には 1 件のまま」、「同じ id の msg が重複して届いても B には 1 件…」 | 未実施 |
 | 6 | アプリを再起動しても、履歴と送信状態が残っている | 必要（プロセスの再起動、Room） | `RoomMessageRepositoryTest`（DAO は Fake）/ `MessageDaoTest`・`ContactDaoTest`（androidTest。未実行）/ `DefaultOutgoingMessageTrackerTest`（`failInterruptedSending`） | なし（メモリ上のリポジトリのため確認できない） | 未実施 |
 | 7 | 片方の Wi-Fi を切って入れ直すと、自動で再接続される | 必要（実回線、ICE の再接続、WebSocket の再接続） | `PeerReconnectorTest` / `ReconnectBackoffTest` / `DefaultSignalingClientTest` / `OkHttpWebSocketClientTest` | 「接続が切れると自動で再接続し その後も送れる」（WebSocket と DataChannel が切れ、戻ったら張り直して両方向に送れる。仮想時間） | 未実施 |
@@ -54,7 +54,7 @@
 - 実時間での 60 秒・10 秒のタイムアウト、端末のスリープ。
 
 ### 見つかった不具合
-- **相手が WebSocket にいないとき、送信失敗のメッセージが履歴に残らず、再送できない**。`P2PChatMessageSender` は P2P が open になってから `tracker.onSendStarted` で保存するため、接続に失敗した送信はメッセージとして保存されない（入力欄の文字が残り、エラーが 1 行出るだけ）。設計書の送信状態は `[*] --> 送信失敗: P2P が未接続`、`docs/apps/android.md` の項目 5 は「B の Wi-Fi を切った状態で送ると『送信失敗』になり、つながった後に再送すると『送信済み』になる」。実機で項目 5b を確かめる前に、方針（保存して失敗にする / 入力欄に残す方針を設計書側に合わせる）を決める必要がある。再現テスト: `MvpIntegrationTest` の「相手がオフラインで送ると 送信失敗のメッセージが残り…」（`@Ignore`、不具合として Issue 化する）。
+- 相手が WebSocket にいないとき送信失敗のメッセージが履歴に残らず再送できなかった不具合は、#58 で修正済み（接続を待つ前に保存し、接続に失敗したら FAILED にする）。
 
 ## 3. 実機での確認手順
 
@@ -91,7 +91,7 @@
 
 ### 項目 5: 送信状態と再送
 1. 5a: A から送る。**期待**: 送信中 → 数秒以内に「送信済み」になる。
-2. 5b: B の Wi-Fi を切る（機内モードでも可）。A から送る。**期待**: 「送信失敗」になる。**既知の不具合**（上記）により、相手が WebSocket から外れている場合は、メッセージが履歴に残らず入力欄にエラーが出るだけになる可能性が高い。そのとおりだったら結果欄に記録する。
+2. 5b: B の Wi-Fi を切る（機内モードでも可）。A から送る。**期待**: 履歴に「送信失敗」のメッセージが残り、入力欄は空になる（失敗の理由が 1 行出る）。
 3. 5c: B の Wi-Fi を戻し、B のアプリが前面でサーバーにつながったことを確認する。A で送信失敗のメッセージをタップして再送する。**期待**: 「送信済み」になる。B には同じメッセージが 1 件だけ表示される（重複しない）。
 
 ### 項目 6: 再起動

@@ -208,6 +208,41 @@ class ChatViewModelTest {
     }
 
     @Test
+    fun 接続や送信の失敗ではメッセージが履歴に残るので入力欄を空にして理由を出す() = runTest {
+        observe()
+        val failures = listOf(
+            ChatSendException(ChatSendException.Reason.PEER, PeerFailure.PeerOffline) to ChatSendError.PeerOffline,
+            ChatSendException(ChatSendException.Reason.PEER, PeerFailure.Rejected) to ChatSendError.Rejected,
+            ChatSendException(ChatSendException.Reason.PEER, PeerFailure.Timeout) to ChatSendError.NoResponse,
+            ChatSendException(ChatSendException.Reason.PEER, PeerFailure.SignalingUnavailable) to ChatSendError.SignalingUnavailable,
+            ChatSendException(ChatSendException.Reason.DISCONNECTED) to ChatSendError.Disconnected,
+        )
+        for ((failure, expected) in failures) {
+            sender.result = Result.failure(failure)
+            viewModel.onInputChange("hello")
+            viewModel.onSendClick()
+            val state = viewModel.uiState.value
+            assertEquals("", state.input)
+            assertTrue(state.sendFailed)
+            assertEquals(expected, state.sendError)
+            assertFalse(state.isSending)
+        }
+    }
+
+    @Test
+    fun 入力の検証エラーでは入力欄を残す() = runTest {
+        observe()
+        sender.result = Result.failure(ChatSendException(ChatSendException.Reason.NO_PUBLIC_KEY))
+        viewModel.onInputChange("hello")
+        viewModel.onSendClick()
+
+        val state = viewModel.uiState.value
+        assertEquals("hello", state.input)
+        assertTrue(state.sendFailed)
+        assertEquals(ChatSendError.NoPublicKey, state.sendError)
+    }
+
+    @Test
     fun 送信中は二重に送れない() = runTest {
         observe()
         sender.gate = CompletableDeferred()

@@ -22,7 +22,6 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
-import org.junit.Ignore
 import org.junit.Test
 import java.util.Base64
 
@@ -158,8 +157,9 @@ class MvpIntegrationTest {
         assertNull(w.b.contacts.getContact(aId))
         assertNull(w.b.requests.current.value)
         assertEquals(1, w.net.created)
-        // 失敗した送信は保存されない
-        assertTrue(w.a.messages.messages.value.isEmpty())
+        // 失敗した送信は「送信失敗」として A の履歴に残る（再送できる）
+        assertEquals(MessageStatus.FAILED, w.a.messages.messages.value.single().status)
+        assertTrue(w.b.messages.messages.value.isEmpty())
     }
 
     @Test
@@ -186,12 +186,16 @@ class MvpIntegrationTest {
         assertEquals("Alice", saved.name)
         assertEquals(w.devA.publicKeyBase64, saved.publicKey)
         assertEquals(listOf("2 回目"), w.b.messages.messages.value.map { it.body })
-        assertEquals(MessageStatus.SENT, w.a.messages.messages.value.single().status)
+        // 拒否された 1 回目は「送信失敗」のまま残り、2 回目は送信済み
+        assertEquals(
+            mapOf("1 回目" to MessageStatus.FAILED, "2 回目" to MessageStatus.SENT),
+            w.a.messages.messages.value.associate { it.body to it.status },
+        )
 
         // B からも返せる（双方向）
         assertTrue(w.b.sender.send(aId, "返信").isSuccess)
         runCurrent()
-        assertEquals(setOf("2 回目", "返信"), w.a.messages.messages.value.map { it.body }.toSet())
+        assertEquals(setOf("返信"), w.a.messages.messages.value.filter { it.direction == MessageDirection.RECEIVED }.map { it.body }.toSet())
         assertEquals(MessageStatus.SENT, w.b.messages.messages.value.single { it.direction == MessageDirection.SENT }.status)
     }
 
@@ -224,7 +228,7 @@ class MvpIntegrationTest {
 
     // (f) 相手がオンラインでない
     @Test
-    fun `相手が WebSocket につながっていないと PeerOffline になり メッセージは保存されない`() = runTest {
+    fun `相手が WebSocket につながっていないと PeerOffline になり メッセージは送信失敗で残る`() = runTest {
         val w = world()
         w.b.signaling.setOnline(false)
 
@@ -237,7 +241,8 @@ class MvpIntegrationTest {
         val failure = result.exceptionOrNull() as ChatSendException
         assertEquals(ChatSendException.Reason.PEER, failure.reason)
         assertEquals(PeerFailure.PeerOffline, failure.peerFailure)
-        assertTrue(w.a.messages.messages.value.isEmpty())
+        assertEquals(MessageStatus.FAILED, w.a.messages.messages.value.single().status)
+        assertTrue(w.b.messages.messages.value.isEmpty())
     }
 
     // (g) 切れたあとの自動再接続
@@ -373,7 +378,6 @@ class MvpIntegrationTest {
 
     // 完了の確認 5: 「B の Wi-Fi を切った状態で送ると『送信失敗』になり、つながった後に再送すると『送信済み』になる」
     // 設計書の送信状態: [*] --> 送信失敗: P2P が未接続
-    @Ignore("バグ: 相手がオフラインのとき送信失敗のメッセージが履歴に残らず、再送できない — Issue 化済み")
     @Test
     fun `相手がオフラインで送ると 送信失敗のメッセージが残り つながった後に再送すると送信済みになる`() = runTest {
         val w = world()
