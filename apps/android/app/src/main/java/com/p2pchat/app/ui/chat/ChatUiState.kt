@@ -5,8 +5,6 @@ data class ChatUiState(
     /** 相手の名前。連絡先が見つからない間は null（画面は既定のタイトルを出す）。 */
     val contactName: String? = null,
     val messages: List<ChatMessageUiModel> = emptyList(),
-    /** 入力欄の文字列。 */
-    val input: String = "",
     /** 本文が UTF-8 で 4096 バイトを超えている。 */
     val isInputTooLong: Boolean = false,
     /** 送信ボタンを押せるか（空白だけ・長すぎ・送信中は false）。 */
@@ -63,15 +61,28 @@ data class ChatMessageUiModel(
     val showTail: Boolean,
     /** 自分が送ったもの（[isSent]）の送信状態。受信メッセージでは使わない。 */
     val sendStatus: ChatSendStatus = ChatSendStatus.Sent,
-)
+) {
+    /**
+     * 吹き出しの下に送信状態を出すか。「送信中」「送信失敗」は（タップで再送するため）どの吹き出しにも出し、
+     * 「送信済み」「既読」は自分の送信の連続のいちばん下（[showTail]）だけに出す。受信には出さない。
+     */
+    val showSendStatus: Boolean
+        get() = isSent && when (sendStatus) {
+            ChatSendStatus.Sending, ChatSendStatus.Failed -> true
+            ChatSendStatus.Sent, ChatSendStatus.Read -> showTail
+        }
+}
 
 /** 送ったメッセージの送信状態（表示用）。 */
 enum class ChatSendStatus {
     /** 送信中（ack 待ち、または再送の準備中）。 */
     Sending,
 
-    /** 相手の ack が届いた。画面には何も出さない。 */
+    /** 相手の ack が届いた（送信済み）。 */
     Sent,
+
+    /** 相手が読んだ（相手から `read` を受けた）。 */
+    Read,
 
     /** 送れなかった、または 10 秒 ack が無かった。タップで再送できる。 */
     Failed,

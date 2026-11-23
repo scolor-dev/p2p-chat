@@ -17,6 +17,29 @@ class ChatFrameCodecTest {
     }
 
     @Test
+    fun readを往復できて形は設計書どおり() {
+        val other = "7a2d1f00-2222-4333-8444-555566667777"
+        val read = ChatFrame.Read(listOf(id, other))
+        assertEquals(read, ChatFrameCodec.decode(ChatFrameCodec.encode(read)))
+        assertEquals("""{"type":"read","ids":["$id","$other"]}""", ChatFrameCodec.encode(read))
+    }
+
+    @Test
+    fun 壊れたreadは捨てる() {
+        val tooMany = (0..ChatFrameCodec.MAX_READ_IDS).joinToString(",") { "\"$id\"" }
+        val bad = listOf(
+            """{"type":"read"}""",
+            """{"type":"read","ids":[]}""",
+            """{"type":"read","ids":"$id"}""",
+            """{"type":"read","ids":["$id","not-a-uuid"]}""",
+            """{"type":"read","ids":[1]}""",
+            """{"type":"read","id":"$id"}""",
+            """{"type":"read","ids":[$tooMany]}""",
+        )
+        for (text in bad) assertNull(text, ChatFrameCodec.decode(text))
+    }
+
+    @Test
     fun 設計書の形のJSONを読める() {
         val frame = ChatFrameCodec.decode("""{"type":"msg","id":"$id","nonce":"AAAA","ct":"BBBB"}""")
         assertEquals(ChatFrame.Msg(id, "AAAA", "BBBB"), frame)

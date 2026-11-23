@@ -20,6 +20,7 @@ import com.p2pchat.app.data.message.OutgoingMessageTracker
 import com.p2pchat.app.data.message.P2PChatMessageSender
 import com.p2pchat.app.data.message.MessageRepository
 import com.p2pchat.app.data.message.RoomMessageRepository
+import com.p2pchat.app.data.message.ReadReceiptSender
 import com.p2pchat.app.data.message.ReadStateRepository
 import com.p2pchat.app.data.message.RoomReadStateRepository
 import com.p2pchat.app.data.device.DataStoreDeviceIdentityStore
@@ -91,6 +92,11 @@ class AppContainer(context: Context) {
         IncomingMessageHandler(
             peerConnector, contactRepository, messageRepository, messageCipher, outgoingMessageTracker, appScope,
         )
+    }
+
+    /** 既読位置が進んだ分を、相手へ `read` で伝える。[P2PChatApp] が起動時に start() する。 */
+    val readReceiptSender: ReadReceiptSender by lazy {
+        ReadReceiptSender(peerConnector, messageRepository, readStateRepository, appScope)
     }
 
     /** 接続先のサーバー設定。DataStore は 1 つのファイルに 1 つだけ作る決まりなので、ここで持つ。 */

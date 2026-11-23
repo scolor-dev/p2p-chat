@@ -1,6 +1,7 @@
 package com.p2pchat.app.data.message
 
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
@@ -13,12 +14,18 @@ sealed interface ChatFrame {
 
     /** 受信確認。 */
     data class Ack(val id: String) : ChatFrame
+
+    /** 既読通知。相手が読んだ（自分が送った）メッセージの id。`ack` と同じく id のみで、暗号化しない。 */
+    data class Read(val ids: List<String>) : ChatFrame
 }
 
 /** [ChatFrame] と JSON テキストの変換。受け取る側は、不正なものを例外ではなく null で返す。 */
 object ChatFrameCodec {
     /** 1 フレームの上限（UTF-8 のバイト数）。超えるものは受信時に捨てる。 */
     const val MAX_FRAME_BYTES = 16 * 1024
+
+    /** 1 つの `read` に載せる id の上限（送るときはこの数ずつに分ける。16 KiB に十分収まる）。 */
+    const val MAX_READ_IDS = 100
 
     private val uuid = Regex("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$")
 
@@ -36,6 +43,10 @@ object ChatFrameCodec {
             put("type", "ack")
             put("id", frame.id)
         }
+        is ChatFrame.Read -> buildJsonObject {
+            put("type", "read")
+            put("ids", JsonArray(frame.ids.map { JsonPrimitive(it) }))
+        }
     }.toString()
 
     /** 16 KiB 超・壊れた JSON・知らない type・必要な項目の欠け・UUID でない id は null。 */
@@ -49,6 +60,14 @@ object ChatFrameCodec {
         } ?: return null
 
         fun string(key: String): String? = (obj[key] as? JsonPrimitive)?.takeIf { it.isString }?.content
+
+        if (string("type") == "read") {
+            // ids は 1〜MAX_READ_IDS 個の UUID。1 つでも不正ならフレームごと捨てる。
+            val ids = (obj["ids"] as? JsonArray)?.map { element ->
+                (element as? JsonPrimitive)?.takeIf { it.isString }?.content?.takeIf { isValidId(it) } ?: return null
+            } ?: return null
+            return if (ids.isEmpty() || ids.size > MAX_READ_IDS) null else ChatFrame.Read(ids)
+        }
 
         val id = string("id")?.takeIf { isValidId(it) } ?: return null
         return when (string("type")) {

@@ -15,6 +15,12 @@ interface ReadStateRepository {
 
     /** [deviceId] の既読位置を [readUpTo] まで進める。いまの位置以前を渡しても戻さない。 */
     suspend fun markRead(deviceId: String, readUpTo: Long)
+
+    /** [deviceId] へ「ここまで読んだ」と `read` で伝え終えた位置（既読位置と同じ sentAt の尺度）。まだ伝えていなければ null。 */
+    suspend fun getReceiptSentUpTo(deviceId: String): Long?
+
+    /** [deviceId] へ [sentUpTo] まで `read` で伝え終えたと記録する。戻さない。 */
+    suspend fun markReceiptSent(deviceId: String, sentUpTo: Long)
 }
 
 /**
@@ -35,4 +41,6 @@ fun unreadDeviceIds(latestReceived: List<Message>, readPositions: Map<String, Lo
 object NoOpReadStateRepository : ReadStateRepository {
     override fun observeReadPositions(): Flow<Map<String, Long>> = flowOf(emptyMap())
     override suspend fun markRead(deviceId: String, readUpTo: Long) = Unit
+    override suspend fun getReceiptSentUpTo(deviceId: String): Long? = null
+    override suspend fun markReceiptSent(deviceId: String, sentUpTo: Long) = Unit
 }

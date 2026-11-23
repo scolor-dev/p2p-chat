@@ -13,6 +13,9 @@ import com.p2pchat.app.data.peer.FakePeerConnector
 import com.p2pchat.app.data.peer.FakePeerSession
 import com.p2pchat.app.data.peer.PeerFailure
 import com.p2pchat.app.data.peer.PeerState
+import androidx.compose.foundation.text.input.setTextAndPlaceCursorAtEnd
+import androidx.compose.foundation.text.input.clearText
+import androidx.compose.runtime.snapshots.Snapshot
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
@@ -97,6 +100,15 @@ class ChatViewModelTest {
     private fun msg(id: String, direction: MessageDirection, at: Long, deviceId: String = "a1") =
         Message(id, deviceId, direction, "body-$id", MessageStatus.SENT, at)
 
+    /** 入力欄に文字を入れる（IME の確定と同じく TextFieldState を直接書き換える）。 */
+    private fun type(text: String) {
+        viewModel.inputState.setTextAndPlaceCursorAtEnd(text)
+        // 実機では Compose が行うスナップショットの変更通知を、テストでは明示する。
+        Snapshot.sendApplyNotifications()
+    }
+
+    private fun inputText(): String = viewModel.inputState.text.toString()
+
     private fun kotlinx.coroutines.test.TestScope.observe() {
         backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { viewModel.uiState.collect {} }
     }
@@ -141,21 +153,21 @@ class ChatViewModelTest {
     @Test
     fun 入力すると状態に入り送信できるようになる() = runTest {
         observe()
-        viewModel.onInputChange("こんにちは")
+        type("こんにちは")
         val state = viewModel.uiState.value
-        assertEquals("こんにちは", state.input)
+        assertEquals("こんにちは", inputText())
         assertTrue(state.canSend)
     }
 
     @Test
     fun 送信するとSenderに本文が渡り成功で入力が空になる() = runTest {
         observe()
-        viewModel.onInputChange("hello\nworld")
+        type("hello\nworld")
         viewModel.onSendClick()
 
         assertEquals(listOf("a1" to "hello\nworld"), sender.sent)
         val state = viewModel.uiState.value
-        assertEquals("", state.input)
+        assertEquals("", inputText())
         assertFalse(state.sendFailed)
         assertFalse(state.isSending)
     }
@@ -164,7 +176,7 @@ class ChatViewModelTest {
     fun 空文字と空白だけは送らない() = runTest {
         observe()
         viewModel.onSendClick()
-        viewModel.onInputChange("  \n\t ")
+        type("  \n\t ")
         assertFalse(viewModel.uiState.value.canSend)
         viewModel.onSendClick()
 
@@ -174,11 +186,11 @@ class ChatViewModelTest {
     @Test
     fun 本文は4096バイトまで送れて超えると送れない() = runTest {
         observe()
-        viewModel.onInputChange("a".repeat(4096))
+        type("a".repeat(4096))
         assertTrue(viewModel.uiState.value.canSend)
         assertFalse(viewModel.uiState.value.isInputTooLong)
 
-        viewModel.onInputChange("a".repeat(4097))
+        type("a".repeat(4097))
         assertTrue(viewModel.uiState.value.isInputTooLong)
         assertFalse(viewModel.uiState.value.canSend)
         viewModel.onSendClick()
@@ -189,9 +201,9 @@ class ChatViewModelTest {
     fun 長さは文字数ではなくUTF8のバイト数で数える() = runTest {
         observe()
         // 「あ」は 3 バイト。1365 文字 = 4095 バイト、1366 文字 = 4098 バイト。
-        viewModel.onInputChange("あ".repeat(1365))
+        type("あ".repeat(1365))
         assertFalse(viewModel.uiState.value.isInputTooLong)
-        viewModel.onInputChange("あ".repeat(1366))
+        type("あ".repeat(1366))
         assertTrue(viewModel.uiState.value.isInputTooLong)
     }
 
@@ -199,16 +211,16 @@ class ChatViewModelTest {
     fun 送信に失敗すると入力を残してエラーを出し入力を変えると消える() = runTest {
         observe()
         sender.result = Result.failure(IllegalStateException("not connected"))
-        viewModel.onInputChange("hello")
+        type("hello")
         viewModel.onSendClick()
 
         var state = viewModel.uiState.value
-        assertEquals("hello", state.input)
+        assertEquals("hello", inputText())
         assertTrue(state.sendFailed)
         assertFalse(state.isSending)
         assertTrue(state.canSend)
 
-        viewModel.onInputChange("hello!")
+        type("hello!")
         assertFalse(viewModel.uiState.value.sendFailed)
     }
 
@@ -224,10 +236,10 @@ class ChatViewModelTest {
         )
         for ((failure, expected) in failures) {
             sender.result = Result.failure(failure)
-            viewModel.onInputChange("hello")
+            type("hello")
             viewModel.onSendClick()
             val state = viewModel.uiState.value
-            assertEquals("", state.input)
+            assertEquals("", inputText())
             assertTrue(state.sendFailed)
             assertEquals(expected, state.sendError)
             assertFalse(state.isSending)
@@ -238,11 +250,11 @@ class ChatViewModelTest {
     fun 入力の検証エラーでは入力欄を残す() = runTest {
         observe()
         sender.result = Result.failure(ChatSendException(ChatSendException.Reason.NO_PUBLIC_KEY))
-        viewModel.onInputChange("hello")
+        type("hello")
         viewModel.onSendClick()
 
         val state = viewModel.uiState.value
-        assertEquals("hello", state.input)
+        assertEquals("hello", inputText())
         assertTrue(state.sendFailed)
         assertEquals(ChatSendError.NoPublicKey, state.sendError)
     }
@@ -251,7 +263,7 @@ class ChatViewModelTest {
     fun 送信中は二重に送れない() = runTest {
         observe()
         sender.gate = CompletableDeferred()
-        viewModel.onInputChange("hello")
+        type("hello")
         viewModel.onSendClick()
 
         assertTrue(viewModel.uiState.value.isSending)
@@ -261,7 +273,91 @@ class ChatViewModelTest {
 
         sender.gate!!.complete(Unit)
         assertFalse(viewModel.uiState.value.isSending)
-        assertEquals("", viewModel.uiState.value.input)
+        assertEquals("", inputText())
+    }
+
+    @Test
+    fun 送信中に打ち足した文字は送信成功でも消えない() = runTest {
+        observe()
+        sender.gate = CompletableDeferred()
+        type("hello")
+        viewModel.onSendClick()
+        assertTrue(viewModel.uiState.value.isSending)
+
+        type("hello world") // 送信中に打ち足す
+        sender.gate!!.complete(Unit)
+
+        assertEquals("hello world", inputText())
+        assertFalse(viewModel.uiState.value.isSending)
+        assertTrue(viewModel.uiState.value.canSend)
+    }
+
+    @Test
+    fun 送信中に打ち足した文字は失敗で入力欄を空にする場合も消えない() = runTest {
+        observe()
+        sender.gate = CompletableDeferred()
+        sender.result = Result.failure(ChatSendException(ChatSendException.Reason.DISCONNECTED))
+        type("hello")
+        viewModel.onSendClick()
+        type("hello!")
+        sender.gate!!.complete(Unit)
+
+        assertEquals("hello!", inputText())
+        assertTrue(viewModel.uiState.value.sendFailed)
+    }
+
+    @Test
+    fun 入力欄が空かどうかと送信可否は入力欄の文字から決まる() = runTest {
+        observe()
+        assertFalse(viewModel.uiState.value.canSend)
+        type("あ")
+        assertTrue(viewModel.uiState.value.canSend)
+        viewModel.inputState.clearText()
+        Snapshot.sendApplyNotifications()
+        assertFalse(viewModel.uiState.value.canSend)
+        assertEquals("", inputText())
+    }
+
+    @Test
+    fun 送信ボタンは入力欄の最新の文字を送る() = runTest {
+        observe()
+        type("こん")
+        type("こんにちは")
+        viewModel.onSendClick()
+        assertEquals(listOf("a1" to "こんにちは"), sender.sent)
+    }
+
+    @Test
+    fun 既読のメッセージは既読の状態になる() = runTest {
+        observe()
+        messages.messages.value = listOf(sentMsg("1", MessageStatus.READ, 1), sentMsg("2", MessageStatus.SENT, 2))
+        assertEquals(listOf(ChatSendStatus.Read, ChatSendStatus.Sent), viewModel.uiState.value.messages.map { it.sendStatus })
+    }
+
+    @Test
+    fun 送信済みと既読は自分の送信の連続のいちばん下だけ出し_送信中と失敗はどれにも出す() = runTest {
+        observe()
+        messages.messages.value = listOf(
+            sentMsg("1", MessageStatus.SENT, 1),
+            sentMsg("2", MessageStatus.FAILED, 2),
+            sentMsg("3", MessageStatus.SENDING, 3),
+            sentMsg("4", MessageStatus.READ, 4),
+            msg("5", MessageDirection.RECEIVED, 5),
+            sentMsg("6", MessageStatus.SENT, 6),
+        )
+        val list = viewModel.uiState.value.messages
+        assertEquals(listOf(false, true, true, true, false, true), list.map { it.showSendStatus })
+    }
+
+    @Test
+    fun 入力を変えると送信エラーは消える() = runTest {
+        observe()
+        sender.result = Result.failure(ChatSendException(ChatSendException.Reason.NO_PUBLIC_KEY))
+        type("hello")
+        viewModel.onSendClick()
+        assertTrue(viewModel.uiState.value.sendFailed)
+        type("hello!")
+        assertFalse(viewModel.uiState.value.sendFailed)
     }
 
     @Test
@@ -302,7 +398,7 @@ class ChatViewModelTest {
         )
         for ((failure, expected) in cases) {
             sender.result = Result.failure(failure)
-            viewModel.onInputChange("hello")
+            type("hello")
             viewModel.onSendClick()
             assertEquals(expected, viewModel.uiState.value.sendError)
         }

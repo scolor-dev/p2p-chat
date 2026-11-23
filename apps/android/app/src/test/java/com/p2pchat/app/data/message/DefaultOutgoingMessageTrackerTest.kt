@@ -123,4 +123,40 @@ class DefaultOutgoingMessageTrackerTest {
         assertEquals(MessageStatus.SENDING, status(received)) // 受信メッセージは対象外
         assertEquals(MessageStatus.SENDING, status(fresh)) // この起動以降に作られたものは触らない
     }
+
+    @Test
+    fun readでSENTがREADになりタイマーも止まる() = runTest {
+        val tracker = DefaultOutgoingMessageTracker(repository, backgroundScope)
+        tracker.onSendStarted(sending())
+        tracker.onAckReceived("peer", id)
+        tracker.onReadReceived("peer", listOf(id))
+        assertEquals(MessageStatus.READ, status())
+        advanceTimeBy(60_000)
+        runCurrent()
+        assertEquals(MessageStatus.READ, status())
+    }
+
+    @Test
+    fun 既読のあとに遅れて届いたackで戻らない() = runTest {
+        val tracker = DefaultOutgoingMessageTracker(repository, backgroundScope)
+        tracker.onSendStarted(sending())
+        tracker.onReadReceived("peer", listOf(id))
+        tracker.onAckReceived("peer", id)
+        assertEquals(MessageStatus.READ, status())
+    }
+
+    @Test
+    fun readはFAILED_他人_受信分_未知のidを無視する() = runTest {
+        val tracker = DefaultOutgoingMessageTracker(repository, backgroundScope)
+        repository.upsertMessage(sending(messageId = "failed").copy(status = MessageStatus.FAILED))
+        repository.upsertMessage(sending(messageId = "other").copy(deviceId = "someone", status = MessageStatus.SENT))
+        repository.upsertMessage(sending(messageId = "recv").copy(direction = MessageDirection.RECEIVED, status = MessageStatus.SENT))
+
+        tracker.onReadReceived("peer", listOf("failed", "other", "recv", "unknown"))
+
+        assertEquals(MessageStatus.FAILED, status("failed"))
+        assertEquals(MessageStatus.SENT, status("other"))
+        assertEquals(MessageStatus.SENT, status("recv"))
+        assertEquals(3, repository.messages.value.size)
+    }
 }

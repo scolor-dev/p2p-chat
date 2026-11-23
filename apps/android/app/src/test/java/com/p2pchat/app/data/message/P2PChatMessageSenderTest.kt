@@ -35,6 +35,7 @@ class P2PChatMessageSenderTest {
         }
 
         override suspend fun onAckReceived(deviceId: String, id: String) = inner.onAckReceived(deviceId, id)
+        override suspend fun onReadReceived(deviceId: String, ids: List<String>) = inner.onReadReceived(deviceId, ids)
         override suspend fun onSendFailed(id: String) {
             events += "failed"
             inner.onSendFailed(id)

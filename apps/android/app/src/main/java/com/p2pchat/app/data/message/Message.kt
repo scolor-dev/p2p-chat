@@ -19,6 +19,9 @@ enum class MessageStatus {
 
     /** 送信失敗。 */
     FAILED,
+
+    /** 相手が読んだ（相手から `read` を受けた）。自分の送信にだけ付く。 */
+    READ,
 }
 
 /**

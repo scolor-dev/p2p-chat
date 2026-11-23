@@ -79,4 +79,11 @@ class InMemoryReadStateRepository : ReadStateRepository {
     override suspend fun markRead(deviceId: String, readUpTo: Long) {
         if (readUpTo > (positions.value[deviceId] ?: Long.MIN_VALUE)) positions.value = positions.value + (deviceId to readUpTo)
     }
+
+    /** `read` を伝え終えた位置（既読位置とは別に持つ）。 */
+    val receiptSent = mutableMapOf<String, Long>()
+    override suspend fun getReceiptSentUpTo(deviceId: String): Long? = receiptSent[deviceId]
+    override suspend fun markReceiptSent(deviceId: String, sentUpTo: Long) {
+        if (sentUpTo > (receiptSent[deviceId] ?: Long.MIN_VALUE)) receiptSent[deviceId] = sentUpTo
+    }
 }
