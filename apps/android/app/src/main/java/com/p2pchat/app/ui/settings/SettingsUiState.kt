@@ -20,6 +20,8 @@ data class SettingsUiState(
     val signalingState: SignalingState = SignalingState.Stopped,
     /** 「バックグラウンドでも通信する」。既定はオン。 */
     val backgroundCommsEnabled: Boolean = true,
+    /** 「この端末を再登録する」の確認ダイアログを出している。 */
+    val showReRegisterDialog: Boolean = false,
 )
 
 /** 接続テスト（`GET /healthz`）の状態。 */

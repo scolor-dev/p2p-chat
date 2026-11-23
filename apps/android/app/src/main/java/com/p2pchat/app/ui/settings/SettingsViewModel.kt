@@ -18,6 +18,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlin.coroutines.cancellation.CancellationException
 
 /**
  * 設定画面の ViewModel。接続先の入力・検証・保存と、接続テストを行う。
@@ -34,6 +35,8 @@ class SettingsViewModel(
 
     private val _uiState = MutableStateFlow(SettingsUiState())
     val uiState: StateFlow<SettingsUiState> = _uiState.asStateFlow()
+
+    private var isReRegistering = false
 
     init {
         viewModelScope.launch {
@@ -71,6 +74,35 @@ class SettingsViewModel(
         viewModelScope.launch {
             appPreferences.backgroundCommsEnabled.collect { enabled ->
                 _uiState.update { it.copy(backgroundCommsEnabled = enabled) }
+            }
+        }
+    }
+
+    fun onReRegisterClick() {
+        _uiState.update { it.copy(showReRegisterDialog = true) }
+    }
+
+    fun onReRegisterDismiss() {
+        _uiState.update { it.copy(showReRegisterDialog = false) }
+    }
+
+    /**
+     * 確認ダイアログで「再登録する」を押したとき。`deviceId` と token を消す（連絡先とメッセージは消さない）。
+     * 消すと identity が null になり、画面は登録画面へ戻る。ダイアログを出していないとき・二重に押されたときは何もしない。
+     */
+    fun onReRegisterConfirm() {
+        if (!_uiState.value.showReRegisterDialog || isReRegistering) return
+        isReRegistering = true
+        _uiState.update { it.copy(showReRegisterDialog = false) }
+        viewModelScope.launch {
+            try {
+                deviceRepository.clearIdentity()
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                // 消せなかったときは、もう一度押せるようにする（メッセージは出さない）
+            } finally {
+                isReRegistering = false
             }
         }
     }

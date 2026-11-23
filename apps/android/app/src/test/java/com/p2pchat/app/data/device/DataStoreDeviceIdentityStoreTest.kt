@@ -99,4 +99,25 @@ class DataStoreDeviceIdentityStoreTest {
     fun 身元のtoStringにtokenを出さない() {
         assertFalse(DeviceIdentity("id", token).toString().contains(token))
     }
+
+    @Test
+    fun 消すと未登録になりもう一度保存できる() = runBlocking {
+        val file = File(tempFolder.root, "id.preferences_pb")
+
+        withStore(file) { it.save(DeviceIdentity("a1b2c3d4e5f60718", token)) }
+        withStore(file) { it.clear() }
+        assertNull(withStore(file) { it.identity.first() })
+
+        withStore(file) { it.save(DeviceIdentity("0123456789abcdef", token)) }
+        assertEquals(DeviceIdentity("0123456789abcdef", token), withStore(file) { it.identity.first() })
+    }
+
+    @Test
+    fun 未登録で消しても何も起きない() = runBlocking {
+        val file = File(tempFolder.root, "id.preferences_pb")
+
+        withStore(file) { it.clear() }
+
+        assertNull(withStore(file) { it.identity.first() })
+    }
 }

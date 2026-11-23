@@ -17,6 +17,14 @@ interface DeviceRepository {
      * @param name 端末の名前。前後の空白を除いて 1〜64 文字（呼び出し側で検証する）
      */
     suspend fun register(server: ServerSettings, name: String): Result<DeviceIdentity>
+
+    /**
+     * 保存している `deviceId` と `token` を消す（再登録のため）。[identity] が null になる。
+     *
+     * 鍵ペア（Keystore）は消さない。次の [register] は、同じ公開鍵で新しい `deviceId` を受け取る。
+     * 連絡先とメッセージの履歴にも触らない。登録の最中なら、それが終わるのを待ってから消す。
+     */
+    suspend fun clearIdentity()
 }
 
 /** 登録に失敗した理由。メッセージには、秘密鍵・token・公開鍵を入れない。 */

@@ -20,6 +20,14 @@ class FakeDeviceRepository(
     /** register に渡された (接続先, 名前)。 */
     val registerCalls = mutableListOf<Pair<ServerSettings, String>>()
 
+    /** clearIdentity が呼ばれた回数。 */
+    var clearCalls = 0
+
+    override suspend fun clearIdentity() {
+        clearCalls++
+        identity.value = null
+    }
+
     override suspend fun register(server: ServerSettings, name: String): Result<DeviceIdentity> {
         registerCalls += server to name
         gate?.await()

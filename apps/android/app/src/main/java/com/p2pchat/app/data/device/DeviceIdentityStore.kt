@@ -15,4 +15,7 @@ interface DeviceIdentityStore {
      * 失敗したら例外を投げる（保存できていない）。
      */
     suspend fun save(identity: DeviceIdentity)
+
+    /** 保存している `deviceId` と `token` を、1 回の書き込みで消す。未登録なら何もしない。 */
+    suspend fun clear()
 }

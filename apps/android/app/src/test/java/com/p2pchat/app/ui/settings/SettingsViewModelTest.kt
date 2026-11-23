@@ -200,4 +200,56 @@ class SettingsViewModelTest {
         assertFalse(preferences.backgroundCommsEnabled.value)
         assertFalse(viewModel.uiState.value.backgroundCommsEnabled)
     }
+
+    private fun reRegisterViewModel(device: FakeDeviceRepository) = SettingsViewModel(
+        FakeServerSettingsRepository(ServerSettings("192.168.1.10", 8080)),
+        FakeApiClient(), device, FakeSignalingClient(), FakeAppPreferencesRepository(),
+    )
+
+    @Test
+    fun 再登録は確認ダイアログを経ないと身元を消さない() = runTest {
+        val device = FakeDeviceRepository(DeviceIdentity("a1b2c3d4e5f60718", "tok"))
+        val viewModel = reRegisterViewModel(device)
+
+        viewModel.onReRegisterConfirm()
+        assertEquals(0, device.clearCalls)
+
+        viewModel.onReRegisterClick()
+        assertTrue(viewModel.uiState.value.showReRegisterDialog)
+        assertEquals(0, device.clearCalls)
+
+        viewModel.onReRegisterDismiss()
+        assertFalse(viewModel.uiState.value.showReRegisterDialog)
+        viewModel.onReRegisterConfirm()
+        assertEquals(0, device.clearCalls)
+
+        viewModel.onReRegisterClick()
+        viewModel.onReRegisterConfirm()
+        assertEquals(1, device.clearCalls)
+        assertNull(device.identity.value)
+        assertNull(viewModel.uiState.value.deviceId)
+        assertFalse(viewModel.uiState.value.showReRegisterDialog)
+    }
+
+    @Test
+    fun 再登録の確定を続けて押しても身元を消すのは1回() = runTest {
+        val device = FakeDeviceRepository(DeviceIdentity("a1b2c3d4e5f60718", "tok"))
+        val viewModel = reRegisterViewModel(device)
+
+        viewModel.onReRegisterClick()
+        viewModel.onReRegisterConfirm()
+        viewModel.onReRegisterConfirm()
+
+        assertEquals(1, device.clearCalls)
+    }
+
+    @Test
+    fun 認証エラーでなくても再登録のダイアログを出せる() = runTest {
+        val viewModel = reRegisterViewModel(FakeDeviceRepository(DeviceIdentity("a1b2c3d4e5f60718", "tok")))
+        assertEquals(SignalingState.Stopped, viewModel.uiState.value.signalingState)
+
+        viewModel.onReRegisterClick()
+
+        assertTrue(viewModel.uiState.value.showReRegisterDialog)
+    }
 }

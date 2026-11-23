@@ -58,6 +58,13 @@ class DataStoreDeviceIdentityStore(
         }
     }
 
+    override suspend fun clear() {
+        dataStore.edit { prefs ->
+            prefs.remove(DEVICE_ID)
+            prefs.remove(ENCRYPTED_TOKEN)
+        }
+    }
+
     companion object {
         /** DataStore のファイル名（バックアップの除外設定と同じ名前にする）。 */
         const val FILE_NAME = "device_identity"

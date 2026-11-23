@@ -72,6 +72,9 @@ class DefaultDeviceRepositoryTest {
             if (failSave) throw IOException("書き込めない")
             this.identity.value = identity
         }
+        override suspend fun clear() {
+            identity.value = null
+        }
     }
 
     private val server = ServerSettings("192.168.1.10", 8080)
@@ -197,5 +200,52 @@ class DefaultDeviceRepositoryTest {
         testScheduler.advanceUntilIdle()
 
         assertEquals(DeviceIdentity("dev0000000000001", "tok"), store.identity.value)
+    }
+
+    @Test
+    fun clearIdentityで身元が消え鍵ペアは作り直さず同じ公開鍵で再登録して新しいdeviceIdになる() = runTest {
+        val api = FakeApiClient()
+        val keys = FakeKeyStore(pair)
+        val store = FakeIdentityStore()
+        val repository = repository(keyStore = keys, api = api, store = store)
+        repository.register(server, "Pixel 8")
+
+        repository.clearIdentity()
+        assertNull(repository.identity.first())
+
+        api.result = Result.success(RegisteredDevice("dev0000000000002", "tok2"))
+        val again = repository.register(server, "Pixel 8").getOrThrow()
+
+        assertEquals(DeviceIdentity("dev0000000000002", "tok2"), again)
+        assertEquals(DeviceIdentity("dev0000000000002", "tok2"), repository.identity.first())
+        assertEquals(2, api.registerCalls.size)
+        // どちらの登録も同じ公開鍵（鍵ペアは消していない）
+        assertEquals(api.registerCalls[0].third, api.registerCalls[1].third)
+    }
+
+    @Test
+    fun 未登録でclearIdentityしても何も起きない() = runTest {
+        val repository = repository()
+
+        repository.clearIdentity()
+
+        assertNull(repository.identity.first())
+    }
+
+    @Test
+    fun 登録の最中のclearIdentityは登録が終わってから消す() = runTest {
+        val gate = CompletableDeferred<Unit>()
+        val store = FakeIdentityStore()
+        val repository = repository(api = FakeApiClient(gate = gate), store = store)
+
+        val registering = launch { repository.register(server, "Pixel 8") }
+        testScheduler.runCurrent()
+        val clearing = launch { repository.clearIdentity() }
+        testScheduler.runCurrent()
+        gate.complete(Unit)
+        registering.join()
+        clearing.join()
+
+        assertNull(store.identity.value)
     }
 }

@@ -38,6 +38,7 @@ import com.p2pchat.app.R
 import com.p2pchat.app.data.signaling.DisconnectReason
 import com.p2pchat.app.data.signaling.SignalingState
 import com.p2pchat.app.ui.notification.rememberNotificationPermissionRequester
+import com.p2pchat.app.ui.registration.ReRegisterDialog
 import com.p2pchat.app.ui.theme.P2PChatTheme
 
 /** 設定画面の入口。接続先のサーバー（IP アドレスとポート）を入力・保存し、接続を試せる。 */
@@ -55,6 +56,9 @@ fun SettingsScreen(
         onPortChange = viewModel::onPortChange,
         onSave = viewModel::save,
         onTestConnection = viewModel::testConnection,
+        onReRegisterClick = viewModel::onReRegisterClick,
+        onReRegisterConfirm = viewModel::onReRegisterConfirm,
+        onReRegisterDismiss = viewModel::onReRegisterDismiss,
         onBackgroundCommsChange = { enabled ->
             viewModel.onBackgroundCommsChange(enabled)
             // オンにしたときに、通知の権限を求める（拒否されても動き続ける）
@@ -74,6 +78,9 @@ fun SettingsContent(
     onSave: () -> Unit,
     onTestConnection: () -> Unit,
     onBackgroundCommsChange: (Boolean) -> Unit = {},
+    onReRegisterClick: () -> Unit = {},
+    onReRegisterConfirm: () -> Unit = {},
+    onReRegisterDismiss: () -> Unit = {},
 ) {
     Scaffold(
         topBar = {
@@ -90,6 +97,9 @@ fun SettingsContent(
                 CircularProgressIndicator(Modifier.align(Alignment.Center))
             }
             return@Scaffold
+        }
+        if (uiState.showReRegisterDialog) {
+            ReRegisterDialog(onConfirm = onReRegisterConfirm, onDismiss = onReRegisterDismiss)
         }
         Column(
             modifier = Modifier
@@ -163,6 +173,12 @@ fun SettingsContent(
                     text = uiState.deviceId?.let { stringResource(R.string.settings_device_id_label, it) }
                         ?: stringResource(R.string.settings_device_not_registered),
                 )
+            }
+            // 登録済みなら、認証エラーでなくても再登録できる
+            if (uiState.deviceId != null) {
+                OutlinedButton(onClick = onReRegisterClick) {
+                    Text(stringResource(R.string.reregister_settings_button))
+                }
             }
         }
     }
