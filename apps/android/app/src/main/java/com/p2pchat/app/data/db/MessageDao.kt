@@ -29,6 +29,14 @@ interface MessageDao {
     )
     fun observeLatestMessages(): Flow<List<MessageEntity>>
 
+    /** 相手ごとの最新の受信メッセージ 1 件（未読の判定用）。 */
+    @Query(
+        "SELECT * FROM messages m1 WHERE m1.direction = 'RECEIVED' AND NOT EXISTS (" +
+            "SELECT 1 FROM messages m2 WHERE m2.deviceId = m1.deviceId AND m2.direction = 'RECEIVED' " +
+            "AND (m2.sentAt > m1.sentAt OR (m2.sentAt = m1.sentAt AND m2.id > m1.id)))",
+    )
+    fun observeLatestReceivedMessages(): Flow<List<MessageEntity>>
+
     @Query("UPDATE messages SET status = 'FAILED' WHERE status = 'SENDING' AND direction = 'SENT' AND sentAt < :olderThan")
     suspend fun failSendingBefore(olderThan: Long): Int
 }

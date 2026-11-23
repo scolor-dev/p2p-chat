@@ -5,6 +5,7 @@ import com.p2pchat.app.data.contact.Contact
 import com.p2pchat.app.data.contact.ContactRepository
 import com.p2pchat.app.data.crypto.PublicKeyFingerprint
 import com.p2pchat.app.data.message.InMemoryMessageRepository
+import com.p2pchat.app.data.message.InMemoryReadStateRepository
 import com.p2pchat.app.data.message.Message
 import com.p2pchat.app.data.message.MessageDirection
 import com.p2pchat.app.data.message.MessageStatus
@@ -43,7 +44,7 @@ class ContactsViewModelTest {
 
     @Test
     fun 連絡先がない間は読み込み完了で空の一覧になる() = runTest {
-        val viewModel = ContactsViewModel(FakeContactRepository(), InMemoryMessageRepository())
+        val viewModel = ContactsViewModel(FakeContactRepository(), InMemoryMessageRepository(), InMemoryReadStateRepository())
 
         val state = viewModel.uiState.first { !it.isLoading }
 
@@ -53,7 +54,7 @@ class ContactsViewModelTest {
     @Test
     fun Repositoryの連絡先が画面の状態に反映される() = runTest {
         val repository = FakeContactRepository()
-        val viewModel = ContactsViewModel(repository, InMemoryMessageRepository())
+        val viewModel = ContactsViewModel(repository, InMemoryMessageRepository(), InMemoryReadStateRepository())
         val alice = Contact(deviceId = "a1", name = "Alice", publicKey = "", isVerified = false, createdAt = 1000L)
 
         repository.contacts.value = listOf(alice)
@@ -72,7 +73,7 @@ class ContactsViewModelTest {
     @Test
     fun メッセージが無い相手は本文が空で未確認と送信失敗は立たない() = runTest {
         val repository = FakeContactRepository()
-        val viewModel = ContactsViewModel(repository, InMemoryMessageRepository())
+        val viewModel = ContactsViewModel(repository, InMemoryMessageRepository(), InMemoryReadStateRepository())
         repository.contacts.value = listOf(
             Contact(deviceId = "a1", name = "Alice", publicKey = "", isVerified = false, createdAt = 1000L),
         )
@@ -88,7 +89,7 @@ class ContactsViewModelTest {
     fun 最新メッセージの本文と送信失敗が相手ごとに反映される() = runTest {
         val contacts = FakeContactRepository()
         val messages = InMemoryMessageRepository()
-        val viewModel = ContactsViewModel(contacts, messages)
+        val viewModel = ContactsViewModel(contacts, messages, InMemoryReadStateRepository())
         contacts.contacts.value = listOf(
             Contact("a1", "Alice", "", false, 1L),
             Contact("b2", "Bob", "", false, 2L),
@@ -112,14 +113,16 @@ class ContactsViewModelTest {
         assertEquals("body-4", items.getValue("b2").latestMessage)
         assertEquals(true, items.getValue("b2").sendError)
         assertEquals(false, items.getValue("c3").sendError)
-        assertEquals(false, items.getValue("b2").isUnread) // 未確認は今回は仮のまま
+        assertEquals(true, items.getValue("b2").isUnread) // 受信 3 が未読
+        assertEquals(false, items.getValue("a1").isUnread) // 送信のみ
+        assertEquals(false, items.getValue("c3").isUnread)
     }
 
     @Test
     fun 送信失敗が再送で送信中に戻ると一覧のエラーが消える() = runTest {
         val contacts = FakeContactRepository()
         val messages = InMemoryMessageRepository()
-        val viewModel = ContactsViewModel(contacts, messages)
+        val viewModel = ContactsViewModel(contacts, messages, InMemoryReadStateRepository())
         contacts.contacts.value = listOf(Contact("a1", "Alice", "", false, 1L))
         messages.messages.value = listOf(message("1", "a1", MessageDirection.SENT, MessageStatus.FAILED, 1))
         assertEquals(true, viewModel.uiState.first { it.contacts.isNotEmpty() && it.contacts.single().sendError }.contacts.single().sendError)
@@ -132,7 +135,7 @@ class ContactsViewModelTest {
     @Test
     fun 確認状態と公開鍵のフィンガープリントが一覧に渡る() = runTest {
         val repository = FakeContactRepository()
-        val viewModel = ContactsViewModel(repository, InMemoryMessageRepository())
+        val viewModel = ContactsViewModel(repository, InMemoryMessageRepository(), InMemoryReadStateRepository())
         val der = "abc".toByteArray()
         repository.contacts.value = listOf(
             Contact("a1", "Alice", Base64.getEncoder().encodeToString(der), isVerified = true, createdAt = 1L),
@@ -146,5 +149,56 @@ class ContactsViewModelTest {
         assertEquals(PublicKeyFingerprint.fromDer(der), items.getValue("a1").fingerprint)
         assertEquals(false, items.getValue("b2").isVerified)
         assertNull(items.getValue("b2").fingerprint)
+    }
+
+    @Test
+    fun 受信が既読位置より新しい相手だけ未読になり既読にすると消える() = runTest {
+        val contacts = FakeContactRepository()
+        val messages = InMemoryMessageRepository()
+        val reads = InMemoryReadStateRepository()
+        val viewModel = ContactsViewModel(contacts, messages, reads)
+        contacts.contacts.value = listOf(
+            Contact("a1", "Alice", "", false, 1L),
+            Contact("b2", "Bob", "", false, 2L),
+        )
+        messages.messages.value = listOf(
+            message("1", "a1", MessageDirection.RECEIVED, MessageStatus.SENT, 10),
+            message("2", "b2", MessageDirection.SENT, MessageStatus.SENT, 20),
+        )
+
+        var items = viewModel.uiState.first { it.contacts.size == 2 && it.contacts.any { c -> c.isUnread } }.contacts.associateBy { it.deviceId }
+        assertEquals(true, items.getValue("a1").isUnread)
+        assertEquals(false, items.getValue("b2").isUnread)
+
+        reads.markRead("a1", 10)
+        items = viewModel.uiState.first { it.contacts.size == 2 && it.contacts.none { c -> c.isUnread } }.contacts.associateBy { it.deviceId }
+        assertEquals(false, items.getValue("a1").isUnread)
+
+        // 既読にしたあとに届いた分は、また未読
+        messages.upsertMessage(message("3", "a1", MessageDirection.RECEIVED, MessageStatus.SENT, 30))
+        items = viewModel.uiState.first { it.contacts.any { c -> c.isUnread } }.contacts.associateBy { it.deviceId }
+        assertEquals(true, items.getValue("a1").isUnread)
+        assertEquals(false, items.getValue("b2").isUnread)
+    }
+
+    @Test
+    fun 一覧は最新メッセージの新しい順でメッセージのない相手は名前順で後ろになる() = runTest {
+        val contacts = FakeContactRepository()
+        val messages = InMemoryMessageRepository()
+        val viewModel = ContactsViewModel(contacts, messages, InMemoryReadStateRepository())
+        contacts.contacts.value = listOf(
+            Contact("z", "Zed", "", false, 1L),
+            Contact("a1", "Alice", "", false, 2L),
+            Contact("b2", "Bob", "", false, 3L),
+            Contact("c3", "Carol", "", false, 4L),
+        )
+        messages.messages.value = listOf(
+            message("1", "b2", MessageDirection.SENT, MessageStatus.SENT, 10),
+            message("2", "c3", MessageDirection.RECEIVED, MessageStatus.SENT, 20),
+        )
+
+        val names = viewModel.uiState.first { it.contacts.size == 4 }.contacts.map { it.name }
+
+        assertEquals(listOf("Carol", "Bob", "Alice", "Zed"), names)
     }
 }
