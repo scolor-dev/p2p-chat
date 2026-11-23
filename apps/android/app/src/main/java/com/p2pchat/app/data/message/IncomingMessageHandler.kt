@@ -27,6 +27,7 @@ import java.util.concurrent.atomic.AtomicBoolean
  *
  * - `msg`: 復号 → [MessageRepository.upsertMessage]（RECEIVED / SENT）→ `ack`。同じ `id` が再び届いたら保存せず `ack` だけ返す。
  * - `ack`: [OutgoingMessageTracker.onAckReceived]。
+ * - `read`: [OutgoingMessageTracker.onReadReceived]（自分の送信を READ にする）。
  * - 復号できない `msg`（鍵の不一致・改ざん・壊れた nonce / ct）は、捨てたうえで [decryptFailures] に相手の端末 ID を流す
  *   （画面の警告用。内容は流さない）。
  * - 復号できない `msg`・壊れた JSON・知らない type・16 KiB 超のフレーム・連絡先にいない相手・4096 バイト超の本文は、
@@ -84,6 +85,7 @@ class IncomingMessageHandler(
     private suspend fun handle(session: PeerSession, text: String) {
         when (val frame = ChatFrameCodec.decode(text) ?: return) {
             is ChatFrame.Ack -> tracker.onAckReceived(session.peerDeviceId, frame.id)
+            is ChatFrame.Read -> tracker.onReadReceived(session.peerDeviceId, frame.ids)
             is ChatFrame.Msg -> handleMsg(session, frame)
         }
     }

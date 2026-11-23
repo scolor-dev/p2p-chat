@@ -4,6 +4,8 @@ import com.p2pchat.app.data.contact.Contact
 import com.p2pchat.app.data.contact.ContactRepository
 import com.p2pchat.app.data.message.DefaultOutgoingMessageTracker
 import com.p2pchat.app.data.message.InMemoryMessageRepository
+import com.p2pchat.app.data.message.InMemoryReadStateRepository
+import com.p2pchat.app.data.message.ReadReceiptSender
 import com.p2pchat.app.data.message.IncomingMessageHandler
 import com.p2pchat.app.data.message.P2PChatMessageSender
 import com.p2pchat.app.data.message.TestDevice
@@ -275,9 +277,20 @@ class Phone(
     val sender = P2PChatMessageSender(contacts, connector, device.cipher, tracker, messages, unconfined, clock = now)
     val reconnector = DefaultPeerReconnector(connector, signaling, StaticNetworkMonitor(), backoff)
 
+    /** 既読位置（チャットを開くと ChatViewModel が markRead で進める）と、それを `read` で伝える部品。 */
+    val reads = InMemoryReadStateRepository()
+    val receipts = ReadReceiptSender(connector, messages, reads, scope)
+
+    /** [peerId] のチャットを開いて、いまある全メッセージを読んだことにする（ChatViewModel と同じ markRead）。 */
+    suspend fun openChatAndRead(peerId: String) {
+        val latest = messages.messages.value.filter { it.deviceId == peerId }.maxOfOrNull { it.sentAt } ?: return
+        reads.markRead(peerId, latest)
+    }
+
     fun start() {
         connector.start()
         incoming.start()
+        receipts.start()
         scope.launch(start = CoroutineStart.UNDISPATCHED) { incoming.decryptFailures.collect { decryptFailures += it } }
     }
 }

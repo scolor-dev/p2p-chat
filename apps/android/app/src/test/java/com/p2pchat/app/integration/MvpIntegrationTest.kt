@@ -397,4 +397,87 @@ class MvpIntegrationTest {
         assertEquals(MessageStatus.SENT, w.a.messages.messages.value.single().status)
         assertEquals(1, w.b.messages.messages.value.size)
     }
+
+    // 既読: A→B 送信 → B がチャットを開く → A が READ（実物の暗号化・ack・read を通す）
+    @Test
+    fun `B がチャットを開くと read が返り A の送信が既読になる`() = runTest {
+        val w = world()
+        assertTrue(w.a.sender.send(bId, "読んで").isSuccess)
+        runCurrent()
+        assertEquals(MessageStatus.SENT, w.a.messages.messages.value.single().status)
+
+        w.b.openChatAndRead(aId)
+        runCurrent()
+
+        assertEquals(MessageStatus.READ, w.a.messages.messages.value.single().status)
+        val frames = w.net.frames.map { ChatFrameCodec.decode(it.third) }
+        val read = frames.filterIsInstance<ChatFrame.Read>().single()
+        assertEquals(listOf(w.a.messages.messages.value.single().id), read.ids)
+        // read は id のみ（本文は載らない）
+        assertFalse(w.net.frames.any { "読んで" in it.third })
+        // タイマーが残っていても READ のまま
+        advanceTimeBy(60_000)
+        assertEquals(MessageStatus.READ, w.a.messages.messages.value.single().status)
+        // 同じ分は二度送らない
+        w.b.openChatAndRead(aId)
+        runCurrent()
+        assertEquals(1, w.net.frames.count { ChatFrameCodec.decode(it.third) is ChatFrame.Read })
+    }
+
+    @Test
+    fun `チャットを開くまで read は送られず 未読のままなら A は送信済みのまま`() = runTest {
+        val w = world()
+        assertTrue(w.a.sender.send(bId, "まだ").isSuccess)
+        runCurrent()
+        assertTrue(w.net.frames.none { ChatFrameCodec.decode(it.third) is ChatFrame.Read })
+        assertEquals(MessageStatus.SENT, w.a.messages.messages.value.single().status)
+    }
+
+    @Test
+    fun `オフラインで送れなかった read は 再接続したときに送られる`() = runTest {
+        val w = world()
+        assertTrue(w.a.sender.send(bId, "切れる前").isSuccess)
+        runCurrent()
+        backgroundScope.launch { w.b.reconnector.keepConnected(aId) }
+        runCurrent()
+
+        // 回線が切れている間に B が読む（read は送れない）
+        w.b.signaling.setOnline(false)
+        w.net.cut(aId, bId)
+        runCurrent()
+        w.b.openChatAndRead(aId)
+        runCurrent()
+        assertEquals(MessageStatus.SENT, w.a.messages.messages.value.single().status)
+        assertTrue(w.b.reads.receiptSent.isEmpty())
+
+        // つながり直すと、溜まっていた read が送られる
+        w.b.signaling.setOnline(true)
+        advanceTimeBy(5_000)
+        runCurrent()
+        assertEquals(MessageStatus.READ, w.a.messages.messages.value.single().status)
+        assertTrue(w.b.reads.receiptSent.isNotEmpty())
+    }
+
+    @Test
+    fun `read の誤入力 FAILED 他人の id 未知の id は無視される`() = runTest {
+        val w = world()
+        val failedId = "11111111-1111-4111-8111-111111111111"
+        val otherId = "22222222-2222-4222-8222-222222222222"
+        val receivedId = "33333333-3333-4333-8333-333333333333"
+        w.a.messages.upsertMessage(com.p2pchat.app.data.message.Message(failedId, bId, MessageDirection.SENT, "f", MessageStatus.FAILED, 1))
+        w.a.messages.upsertMessage(com.p2pchat.app.data.message.Message(otherId, "cccccccccccccccc", MessageDirection.SENT, "o", MessageStatus.SENT, 2))
+        w.a.messages.upsertMessage(com.p2pchat.app.data.message.Message(receivedId, bId, MessageDirection.RECEIVED, "r", MessageStatus.SENT, 3))
+        w.a.connector.connect(bId)
+        runCurrent()
+
+        val unknown = "44444444-4444-4444-8444-444444444444"
+        w.net.deliver(bId, aId, ChatFrameCodec.encode(ChatFrame.Read(listOf(failedId, otherId, receivedId, unknown))))
+        runCurrent()
+
+        val byId = w.a.messages.messages.value.associateBy { it.id }
+        assertEquals(MessageStatus.FAILED, byId.getValue(failedId).status)
+        assertEquals(MessageStatus.SENT, byId.getValue(otherId).status)
+        assertEquals(MessageStatus.SENT, byId.getValue(receivedId).status)
+        assertEquals(3, byId.size)
+    }
 }

@@ -21,6 +21,7 @@ class P2PChatApp : Application() {
         // 相手からの offer を取りこぼさないように、起動時から受信を始める（libwebrtc は最初の接続まで読み込まない）
         container.peerConnector.start()
         container.incomingMessageHandler.start()
+        container.readReceiptSender.start()
         // 前回のプロセスで SENDING のまま残ったメッセージは、ack を待つ処理がもう無いので FAILED にする（手動で再送できる）。
         container.appScope.launch { container.outgoingMessageTracker.failInterruptedSending() }
 

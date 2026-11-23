@@ -18,6 +18,12 @@ interface OutgoingMessageTracker {
     /** [deviceId] の相手から [id] の `ack` が届いた。 */
     suspend fun onAckReceived(deviceId: String, id: String)
 
+    /**
+     * [deviceId] の相手から、[ids] を読んだという `read` が届いた。自分がその相手に送ったメッセージのうち、
+     * 届いている（SENT。ack より先に届いた場合の SENDING も含む）ものだけ READ にする。FAILED・他人宛て・受信分・未知の id は無視。
+     */
+    suspend fun onReadReceived(deviceId: String, ids: List<String>)
+
     /** [id] を送れなかった（暗号化の失敗、DataChannel に載せられなかった等）。 */
     suspend fun onSendFailed(id: String)
 
@@ -57,7 +63,22 @@ class DefaultOutgoingMessageTracker(
         // 自分が、その相手に送ったメッセージの ack だけを受け付ける（他人の id や受信分は無視）。
         if (message.deviceId != deviceId || message.direction != MessageDirection.SENT) return
         stopTimer(id)
-        if (message.status != MessageStatus.SENT) messageRepository.updateStatus(id, MessageStatus.SENT)
+        // 既読になったあとに、遅れて（重複して）届いた ack で SENT に戻さない。
+        if (message.status != MessageStatus.SENT && message.status != MessageStatus.READ) {
+            messageRepository.updateStatus(id, MessageStatus.SENT)
+        }
+    }
+
+    override suspend fun onReadReceived(deviceId: String, ids: List<String>) {
+        for (id in ids) {
+            val message = messageRepository.getMessage(id) ?: continue
+            if (message.deviceId != deviceId || message.direction != MessageDirection.SENT) continue
+            // read は「相手に届いた」ことも意味する。ack が追い越されて SENDING のままでも、読まれたなら READ にしてよい。
+            // FAILED（届いていない扱い）と READ（済み）は触らない。
+            if (message.status != MessageStatus.SENT && message.status != MessageStatus.SENDING) continue
+            stopTimer(id)
+            messageRepository.updateStatus(id, MessageStatus.READ)
+        }
     }
 
     override suspend fun onSendFailed(id: String) {

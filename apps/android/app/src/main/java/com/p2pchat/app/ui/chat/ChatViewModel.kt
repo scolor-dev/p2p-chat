@@ -1,5 +1,9 @@
 package com.p2pchat.app.ui.chat
 
+import androidx.compose.foundation.text.input.TextFieldState
+import androidx.compose.foundation.text.input.clearText
+import androidx.compose.runtime.snapshotFlow
+import androidx.compose.runtime.snapshots.Snapshot
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider.AndroidViewModelFactory.Companion.APPLICATION_KEY
 import androidx.lifecycle.viewModelScope
@@ -63,14 +67,25 @@ class ChatViewModel(
     /** チャット画面が見えている（前面にある）間だけ true。閉じたあと・背面に届いたものは未読のままにする。 */
     private val visible = MutableStateFlow(false)
 
-    private data class InputState(
-        val text: String = "",
+    /**
+     * 入力欄の文字。IME（変換中の文字を含む）と同期的にやり取りするため、StateFlow を経由せず [TextFieldState] を直接持つ。
+     * 画面はこれを `BasicTextField(state = ...)` に渡す。ViewModel は読む（[onSendClick]）・空にするだけで、
+     * 文字を書き込むのは入力欄（IME）だけ。
+     */
+    val inputState = TextFieldState()
+
+    /** 直近の送信の失敗。[text] は失敗した時点の入力欄の文字で、入力を変えると（[text] と違えば）エラーは消える。 */
+    private data class SendFailure(val error: ChatSendError, val text: String)
+
+    private data class SendState(
         val isSending: Boolean = false,
-        val sendFailed: Boolean = false,
-        val sendError: ChatSendError = ChatSendError.Generic,
+        val failure: SendFailure? = null,
     )
 
-    private val inputState = MutableStateFlow(InputState())
+    private val sendState = MutableStateFlow(SendState())
+
+    /** 入力欄の確定した文字列（変更のたびに流れる）。Compose のスナップショットの変更を Flow にする。 */
+    private val inputText: Flow<String> = snapshotFlow { inputState.text.toString() }
 
     /** 再送の処理中（接続の待ちを含む）のメッセージ。DB が SENDING になるまでの間も「送信中」に見せる。 */
     private val resendingIds = MutableStateFlow<Set<String>>(emptySet())
@@ -125,12 +140,13 @@ class ChatViewModel(
         combine(
             contactRepository.observeContacts().map { contacts -> contacts.firstOrNull { it.deviceId == deviceId }?.name },
             messageRepository.observeMessages(deviceId),
-            inputState,
+            combine(sendState, inputText) { send, text -> send to text },
             connection,
             combine(resendingIds, decryptWarning) { ids, warning -> ids to warning },
-        ) { name, messages, input, connection, (resending, warning) ->
+        ) { name, messages, (send, text), connection, (resending, warning) ->
             val tails = tailFlags(messages.map { it.direction })
-            val tooLong = isTooLong(input.text)
+            val tooLong = isTooLong(text)
+            val failure = send.failure?.takeIf { it.text == text }
             ChatUiState(
                 contactName = name,
                 messages = messages.mapIndexed { index, message ->
@@ -143,16 +159,16 @@ class ChatViewModel(
                             message.id in resending -> ChatSendStatus.Sending
                             message.status == MessageStatus.SENDING -> ChatSendStatus.Sending
                             message.status == MessageStatus.FAILED -> ChatSendStatus.Failed
+                            message.status == MessageStatus.READ -> ChatSendStatus.Read
                             else -> ChatSendStatus.Sent
                         },
                     )
                 },
-                input = input.text,
                 isInputTooLong = tooLong,
-                canSend = input.text.isNotBlank() && !tooLong && !input.isSending,
-                isSending = input.isSending,
-                sendFailed = input.sendFailed,
-                sendError = input.sendError,
+                canSend = text.isNotBlank() && !tooLong && !send.isSending,
+                isSending = send.isSending,
+                sendFailed = failure != null,
+                sendError = failure?.error ?: ChatSendError.Generic,
                 connection = connection,
                 decryptWarning = warning,
             )
@@ -167,34 +183,33 @@ class ChatViewModel(
         visible.value = isVisible
     }
 
-    fun onInputChange(text: String) {
-        inputState.update { it.copy(text = text, sendFailed = false) }
-    }
-
     fun onSendClick() {
-        val current = inputState.value
-        val body = current.text
-        if (current.isSending || body.isBlank() || isTooLong(body)) return
-        inputState.update { it.copy(isSending = true, sendFailed = false, sendError = ChatSendError.Generic) }
+        val body = inputState.text.toString()
+        if (sendState.value.isSending || body.isBlank() || isTooLong(body)) return
+        sendState.value = SendState(isSending = true)
         viewModelScope.launch {
             val result = sender.send(deviceId, body)
-            inputState.update { state ->
-                if (result.isSuccess) {
-                    // 送っている間に打ち足していたら、その文字は消さない。
-                    state.copy(text = if (state.text == body) "" else state.text, isSending = false)
-                } else {
-                    val error = result.exceptionOrNull()
-                    // 接続や送信の失敗では、メッセージは「送信失敗」として履歴に残っている（タップで再送できる）ので入力欄は空にする。
-                    // 入力の検証エラー（空・長すぎ・公開鍵なし）は保存されないので、入力を残す。
-                    val kept = error is ChatSendException && error.reason.keepsMessage()
-                    state.copy(
-                        text = if (kept && state.text == body) "" else state.text,
-                        isSending = false,
-                        sendFailed = true,
-                        sendError = error.toSendError(),
-                    )
-                }
+            if (result.isSuccess) {
+                // 送っている間に打ち足していたら、その文字は消さない。
+                clearIfUnchanged(body)
+                sendState.value = SendState()
+            } else {
+                val error = result.exceptionOrNull()
+                // 接続や送信の失敗では、メッセージは「送信失敗」として履歴に残っている（タップで再送できる）ので入力欄は空にする。
+                // 入力の検証エラー（空・長すぎ・公開鍵なし）は保存されないので、入力を残す。
+                val kept = error is ChatSendException && error.reason.keepsMessage()
+                if (kept) clearIfUnchanged(body)
+                sendState.value = SendState(failure = SendFailure(error.toSendError(), inputState.text.toString()))
             }
+        }
+    }
+
+    /** 入力欄が [body] のままのときだけ空にする（送っている間に打ち足した文字は消さない）。 */
+    private fun clearIfUnchanged(body: String) {
+        if (inputState.text.toString() == body) {
+            inputState.clearText()
+            // 空にしたことを、続く状態の更新より先に [inputText] へ届ける（失敗の判定が古い文字を見ないように）。
+            Snapshot.sendApplyNotifications()
         }
     }
 
@@ -204,7 +219,7 @@ class ChatViewModel(
         val message = uiState.value.messages.firstOrNull { it.id == messageId } ?: return
         if (!message.isSent || message.sendStatus != ChatSendStatus.Failed) return
         resendingIds.update { it + messageId }
-        inputState.update { it.copy(sendFailed = false) }
+        sendState.update { it.copy(failure = null) }
         viewModelScope.launch {
             val result = try {
                 sender.resend(deviceId, messageId)
@@ -212,7 +227,9 @@ class ChatViewModel(
                 resendingIds.update { it - messageId }
             }
             if (result.isFailure) {
-                inputState.update { it.copy(sendFailed = true, sendError = result.exceptionOrNull().toSendError()) }
+                sendState.update {
+                    it.copy(failure = SendFailure(result.exceptionOrNull().toSendError(), inputState.text.toString()))
+                }
             }
         }
     }
