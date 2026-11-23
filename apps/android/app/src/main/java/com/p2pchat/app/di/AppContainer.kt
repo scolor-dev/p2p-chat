@@ -13,6 +13,8 @@ import com.p2pchat.app.data.crypto.DeviceKeyStore
 import com.p2pchat.app.data.crypto.EcdhSharedSecretProvider
 import com.p2pchat.app.data.crypto.MessageCipher
 import com.p2pchat.app.data.db.AppDatabase
+import com.p2pchat.app.data.message.MessageRepository
+import com.p2pchat.app.data.message.RoomMessageRepository
 import com.p2pchat.app.data.device.DataStoreDeviceIdentityStore
 import com.p2pchat.app.data.device.DefaultDeviceRepository
 import com.p2pchat.app.data.device.DeviceIdentityStore
@@ -40,6 +42,9 @@ class AppContainer(context: Context) {
     val contactRepository: ContactRepository by lazy {
         OfflineContactRepository(database.contactDao())
     }
+
+    /** Room DB を使用するメッセージリポジトリ。#26 が使う。 */
+    val messageRepository: MessageRepository by lazy { RoomMessageRepository(database.messageDao()) }
 
     /** 接続先のサーバー設定。DataStore は 1 つのファイルに 1 つだけ作る決まりなので、ここで持つ。 */
     val serverSettingsRepository: ServerSettingsRepository by lazy {
